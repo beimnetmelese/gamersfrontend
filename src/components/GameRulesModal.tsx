@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { Game } from '../types';
 import { IconShield, IconCheck } from './Icons';
 
@@ -13,9 +14,9 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({
   onClose,
   onConfirmJoin,
 }) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="glass-panel max-w-xl w-full p-6 space-y-6 border border-cyan-500/30 animate-fadeIn">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+      <div className="glass-panel max-w-xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 border border-cyan-500/30 animate-fadeIn my-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -81,4 +82,6 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

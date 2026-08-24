@@ -5,7 +5,6 @@ export type GameType =
   | 'LOWEST_UNIQUE'
   | 'HIGHEST_CARD'
   | 'SECRET_NUMBER'
-  | 'PREDICTION'
   | 'PRECISION_TIMER';
 
 export type GameStatus = 
@@ -15,7 +14,27 @@ export type GameStatus =
   | 'ACTIVE'
   | 'COMPLETED'
   | 'CANCELLED'
-  | 'REFUNDED';
+  | 'REFUNDED'
+  | 'REJECTED';
+
+export type CategoryName = 
+  | 'Phones'
+  | 'Laptops'
+  | 'Gaming'
+  | 'Electronics'
+  | 'Fashion'
+  | 'Home'
+  | 'Vehicles'
+  | 'Other';
+
+export interface Category {
+  id: number;
+  name: CategoryName;
+  slug: string;
+  icon: string;
+  description: string;
+  gameCount?: number;
+}
 
 export type PaymentStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
 
@@ -67,11 +86,20 @@ export interface Game {
   participantsCount: number;
   totalBoxes?: number;
   durationMinutes: number;
+  endTime?: string;
   rulesDescription: string;
   status: GameStatus;
   createdAt: string;
+  isFeatured?: boolean;
+  isRecommended?: boolean;
+  viewsCount?: number;
+  questionPrompt?: string;
+  targetTimeSec?: number;
   winnerName?: string;
   winningValue?: string;
+  bracketData?: any;
+  participants?: GameParticipant[];
+  rejectionReason?: string;
 }
 
 export interface GameParticipant {
@@ -84,7 +112,41 @@ export interface GameParticipant {
   selectedCard?: string;
   predictionAnswer?: number;
   timerDeltaMs?: number;
+  h2hChoice?: string;
+  tournamentSlot?: number;
   joinedAt: string;
+}
+
+export interface WinnerRecord {
+  id: number;
+  gameId: number;
+  gameTitle: string;
+  winnerName: string;
+  winningValue: string;
+  productTitle: string;
+  productImage: string;
+  calculatedAt: string;
+}
+
+export interface GameFilterState {
+  searchQuery: string;
+  category: string;
+  gameType: string;
+  minEntryFee: number;
+  maxEntryFee: number;
+  status: string;
+  sortBy: 'newest' | 'fee_low' | 'fee_high' | 'popular' | 'ending_soon';
+}
+
+export interface GameStatisticsData {
+  gameId: number;
+  viewsCount: number;
+  participantsCount: number;
+  maxParticipants: number;
+  completionRate: number;
+  entryFee: number;
+  prizeValue: number;
+  status: string;
 }
 
 export interface WalletTransaction {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Wallet } from '../types';
 import { submitPaymentProof } from '../services/api';
 import { IconWallet, IconCheck, IconPlus } from './Icons';
@@ -42,9 +43,9 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="glass-panel max-w-2xl w-full p-6 space-y-6 border border-cyan-500/30">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+      <div className="glass-panel max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 border border-cyan-500/30 my-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -190,4 +191,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

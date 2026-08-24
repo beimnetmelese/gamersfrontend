@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
-import type { Role, Game, Product, Wallet } from './types';
-import { fetchGames, fetchWallet } from './services/api';
+import type { Role, Game, Wallet } from './types';
+import { fetchGames, fetchWallet, resolveGameAPI, createGameAPI, updateGameAPI, deductWalletBalance } from './services/api';
 import { Navbar } from './components/Navbar';
 import { WalletModal } from './components/WalletModal';
-import { MarketplacePage } from './pages/MarketplacePage';
+import { HomePage } from './pages/HomePage';
+import { ExplorePage } from './pages/ExplorePage';
+import { CategoryPage } from './pages/CategoryPage';
 import { GameDetailPage } from './pages/GameDetailPage';
 import { UserDashboardPage } from './pages/UserDashboardPage';
 import { SellerDashboardPage } from './pages/SellerDashboardPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { WinnerRevealModal } from './components/WinnerRevealModal';
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<Role>('USER');
-  const [activeTab, setActiveTab] = useState<string>('marketplace');
+  const [activeTab, setActiveTab] = useState<string>('home');
   
   const [games, setGames] = useState<Game[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
@@ -19,6 +22,14 @@ export function App() {
   const [wallet, setWallet] = useState<Wallet>({ balance: 2500, transactions: [] });
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Winner Reveal modal state
+  const [resolvedWinnerModal, setResolvedWinnerModal] = useState<{
+    game: Game;
+    winnerName: string;
+    winningValue?: string;
+    details?: string;
+  } | null>(null);
 
   const loadInitialData = async () => {
     const loadedGames = await fetchGames();
@@ -39,19 +50,39 @@ export function App() {
   const handleSelectGame = (game: Game) => {
     setSelectedGame(game);
     setActiveTab('detail');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAddProduct = (prod: Partial<Product>) => {
-    triggerToast(`Product "${prod.title}" added to inventory (Pending Approval).`);
-  };
+  const handleAddGame = async (newGame: Partial<Game>) => {
+    if (newGame.id) {
+      // RESUBMISSION of existing rejected post
+      const updated = await updateGameAPI(newGame.id, {
+        ...newGame,
+        status: 'PENDING_APPROVAL',
+        rejectionReason: ''
+      });
+      setGames(prev => prev.map(g => g.id === newGame.id ? (updated || {
+        ...g,
+        ...newGame,
+        status: 'PENDING_APPROVAL',
+        rejectionReason: ''
+      }) : g));
+      triggerToast(`Post "${newGame.title || 'Challenge'}" resubmitted for Admin Approval!`);
+      return;
+    }
 
-  const handleAddGame = (newGame: Partial<Game>) => {
-    const created: Game = {
-      id: games.length + 1,
-      product: {
-        id: 99,
+    // Send POST payload to Django Backend REST API for new post
+    const backendCreated = await createGameAPI({
+      ...newGame,
+      status: 'PENDING_APPROVAL'
+    });
+
+    const created: Game = backendCreated || {
+      id: Date.now(),
+      product: newGame.product || {
+        id: Date.now(),
         title: newGame.title || 'New Product',
-        category: 'Smartphones',
+        category: 'Phones',
         description: 'Seller listed item',
         imageUrl: 'https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=600&q=80',
         condition: 'NEW',
@@ -60,29 +91,60 @@ export function App() {
         approvalStatus: 'PENDING'
       },
       sellerName: 'Addis Tech Hub',
-      title: newGame.title || 'New Game',
+      title: newGame.title || 'New Game Post',
       gameType: newGame.gameType || 'TREASURE_BOX',
       entryFee: newGame.entryFee || 200,
       maxParticipants: newGame.maxParticipants || 100,
       participantsCount: 0,
-      durationMinutes: 120,
+      durationMinutes: newGame.durationMinutes || 1440,
+      targetTimeSec: newGame.targetTimeSec || 10.0,
       rulesDescription: newGame.rulesDescription || 'Standard rules',
+      questionPrompt: newGame.questionPrompt,
       status: 'PENDING_APPROVAL',
+      rejectionReason: '',
       createdAt: new Date().toISOString()
     };
 
-    setGames([created, ...games]);
-    triggerToast(`Game "${newGame.title}" submitted to Admin for approval!`);
+    setGames(prev => [created, ...prev]);
+    triggerToast(`Competition Post "${created.title}" submitted for Admin Approval!`);
   };
 
-  const handleApproveGame = (gameId: number) => {
-    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'ACTIVE' } : g));
-    triggerToast('Game approved by admin and is now ACTIVE!');
+  const handleApproveGame = async (gameId: number) => {
+    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'ACTIVE', rejectionReason: '' } : g));
+    try {
+      await fetch(`http://localhost:8000/api/games/${gameId}/approve_game/`, { method: 'POST' });
+    } catch (e) {}
+    triggerToast('Game approved by admin and is now LIVE & ACTIVE!');
   };
 
-  const handleResolveGame = (gameId: number) => {
-    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'COMPLETED', winnerName: 'User_Abebe' } : g));
-    triggerToast('🏆 Backend Game Engine resolved game! Winner announced.');
+  const handleRejectGame = async (gameId: number, reason: string) => {
+    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'REJECTED', rejectionReason: reason } : g));
+    try {
+      await fetch(`http://localhost:8000/api/games/${gameId}/reject_game/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+    } catch (e) {}
+    triggerToast(`Post rejected by admin with feedback: "${reason}"`);
+  };
+
+  const handleResolveGame = async (gameId: number) => {
+    const targetGame = games.find(g => g.id === gameId);
+    const res = await resolveGameAPI(gameId);
+
+    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'COMPLETED', winnerName: res.winner || 'User_Abebe' } : g));
+
+    if (targetGame) {
+      setResolvedWinnerModal({
+        game: targetGame,
+        winnerName: res.winner || 'User_Abebe',
+        winningValue: res.winner ? 'Box #47' : 'Lowest Unique #3',
+        details: res.details || res.message
+      });
+    }
+
+    triggerToast('🏆 Backend Game Engine resolved game! Winner revealed.');
   };
 
   return (
@@ -111,9 +173,24 @@ export function App() {
       {/* Main Container Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 pb-16">
         
-        {activeTab === 'marketplace' && (
-          <MarketplacePage
-            games={games.filter(g => g.status === 'ACTIVE' || g.status === 'PENDING_APPROVAL')}
+        {activeTab === 'home' && (
+          <HomePage
+            games={games}
+            onSelectGame={handleSelectGame}
+            onNavigateExplore={() => setActiveTab('explore')}
+          />
+        )}
+
+        {activeTab === 'explore' && (
+          <ExplorePage
+            games={games}
+            onSelectGame={handleSelectGame}
+          />
+        )}
+
+        {activeTab === 'categories' && (
+          <CategoryPage
+            games={games}
             onSelectGame={handleSelectGame}
           />
         )}
@@ -122,11 +199,21 @@ export function App() {
           <GameDetailPage
             game={selectedGame}
             onBack={() => {
-              setActiveTab('marketplace');
+              setActiveTab('explore');
               setSelectedGame(null);
             }}
             walletBalance={wallet.balance}
             onRefreshWallet={loadInitialData}
+            onDeductWallet={(fee) => {
+              const newBal = deductWalletBalance(fee);
+              setWallet(prev => ({ ...prev, balance: newBal }));
+              return newBal;
+            }}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            onUpdateGame={(updated) => {
+              setSelectedGame(updated);
+              setGames(prev => prev.map(g => g.id === updated.id ? updated : g));
+            }}
           />
         )}
 
@@ -140,7 +227,6 @@ export function App() {
         {activeTab === 'seller' && (
           <SellerDashboardPage
             games={games}
-            onAddProduct={handleAddProduct}
             onAddGame={handleAddGame}
           />
         )}
@@ -149,6 +235,7 @@ export function App() {
           <AdminDashboardPage
             games={games}
             onApproveGame={handleApproveGame}
+            onRejectGame={handleRejectGame}
             onResolveGame={handleResolveGame}
           />
         )}
@@ -164,9 +251,20 @@ export function App() {
         />
       )}
 
+      {/* Winner Reveal Celebration Modal */}
+      {resolvedWinnerModal && (
+        <WinnerRevealModal
+          game={resolvedWinnerModal.game}
+          winnerName={resolvedWinnerModal.winnerName}
+          winningValue={resolvedWinnerModal.winningValue}
+          details={resolvedWinnerModal.details}
+          onClose={() => setResolvedWinnerModal(null)}
+        />
+      )}
+
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500 font-mono">
-        AddisGigs Games Platform Architecture • All rights reserved 2026
+        AddisGigs Games Platform Architecture • Developer 2 Module Active
       </footer>
 
     </div>
