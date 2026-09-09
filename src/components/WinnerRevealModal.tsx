@@ -20,7 +20,10 @@ export const WinnerRevealModal: React.FC<WinnerRevealModalProps> = ({
 }) => {
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg overflow-hidden">
+      <div
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-lg overflow-hidden"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.8, rotate: -2 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}

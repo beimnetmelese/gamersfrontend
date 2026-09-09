@@ -1,6 +1,8 @@
+import React, { useState } from 'react';
 import { CountdownTimer } from './CountdownTimer';
 import type { Game } from '../types';
-import { Package, Key, Layers, Target, TrendingUp, Timer, Swords, Trophy, Users } from 'lucide-react';
+import { Package, Key, Layers, Target, TrendingUp, Timer, Swords, Trophy, Users, Heart } from 'lucide-react';
+import { toggleFavoriteAPI } from '../services/api';
 
 export interface GameCardProps {
   game: Game;
@@ -9,9 +11,18 @@ export interface GameCardProps {
 }
 
 export const GameCard: React.FC<GameCardProps> = ({ game, onSelect, onSelectGame }) => {
+  const [isFav, setIsFav] = useState(game.isFavorited || false);
+
   const handleCardClick = () => {
     if (onSelect) onSelect(game);
     else if (onSelectGame) onSelectGame(game);
+  };
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextState = !isFav;
+    setIsFav(nextState);
+    await toggleFavoriteAPI(game.id);
   };
 
   const getGameTypeIcon = (type: string) => {
@@ -43,7 +54,6 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onSelect, onSelectGame
   };
 
   const progressPercent = Math.round((game.participantsCount / game.maxParticipants) * 100);
-
   const isEnded = (game.status as string) === 'COMPLETED' || (game.status as string) === 'ENDED' || Boolean(game.winnerName);
 
   return (
@@ -59,7 +69,16 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onSelect, onSelectGame
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-90"></div>
         
-        {/* Top Floating Badges */}
+        {/* Favorite Heart Toggle */}
+        <button
+          onClick={handleFavoriteClick}
+          className="absolute top-3 right-3 p-2 rounded-full bg-slate-950/80 backdrop-blur-md border border-slate-700/80 text-rose-400 hover:scale-110 transition-all z-30"
+          title={isFav ? "Remove Favorite" : "Add Favorite"}
+        >
+          <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : 'text-slate-300'}`} />
+        </button>
+
+        {/* Winner Banner */}
         {Boolean(game.winnerName) && (game.winnerName === 'User_Abebe' || game.winnerName === 'You' || game.winnerName === 'gamer_alex') && (
           <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-[10px] py-1 text-center shadow-lg uppercase tracking-wider flex items-center justify-center gap-1 z-20 border-b border-amber-300">
             <Trophy className="w-3.5 h-3.5 fill-slate-950" />
@@ -87,19 +106,13 @@ export const GameCard: React.FC<GameCardProps> = ({ game, onSelect, onSelectGame
           ) : null}
         </div>
 
-        <div className="absolute top-3 right-3">
-          <span className="badge-pill bg-emerald-950/90 backdrop-blur-md border border-emerald-500/40 text-emerald-400 font-mono font-bold text-xs px-2.5 py-0.5 rounded-full">
-            {game.entryFee} ETB
-          </span>
-        </div>
-
         {/* Product Estimated Value */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs">
           <span className="text-slate-300 font-medium truncate max-w-[60%] text-[11px]">
             Seller: <strong className="text-white">{game.sellerName}</strong>
           </span>
           <span className="text-amber-400 font-mono bg-amber-950/70 px-2 py-0.5 rounded-md border border-amber-500/30 font-semibold text-[11px]">
-            Val: {game.product.estimatedValue.toLocaleString()} ETB
+            Fee: {game.entryFee} ETB
           </span>
         </div>
       </div>

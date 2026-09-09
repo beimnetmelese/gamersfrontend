@@ -101,7 +101,7 @@ export const GameDetailPage: React.FC<GameDetailPageProps> = ({
     fetchGameStatistics(game.id).then(setStats);
     if (!hasIncrementedViewRef.current) {
       hasIncrementedViewRef.current = true;
-      incrementGameViewsAPI(game.id).then((newViews) => {
+      incrementGameViewsAPI(game.id).then((newViews: number) => {
         onUpdateGame?.({ ...game, viewsCount: newViews });
       });
     }

@@ -42,7 +42,7 @@ export const PredictionChallengeInput: React.FC<PredictionProps> = ({
             type="number"
             step="0.01"
             value={predictionAnswer ?? ''}
-            onChange={(e) => onSelectPrediction(parseFloat(e.target.value) || 0)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSelectPrediction(parseFloat(e.target.value) || 0)}
             className="w-full h-14 bg-slate-950 border-2 border-blue-500/50 rounded-xl px-4 text-2xl font-bold font-mono text-blue-300 focus:outline-none focus:border-blue-400 shadow-inner"
             placeholder="e.g. 5420.50"
           />

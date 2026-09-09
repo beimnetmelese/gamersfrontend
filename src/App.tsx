@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { Role, Game, Wallet } from './types';
-import { fetchGames, fetchWallet, resolveGameAPI, createGameAPI, updateGameAPI, deductWalletBalance } from './services/api';
+import type { Role, Game, Wallet, User } from './types';
+import { fetchGames, fetchWallet, resolveGameAPI, createGameAPI, updateGameAPI, deductWalletBalance, logoutUserAPI, fetchUserProfileAPI } from './services/api';
 import { Navbar } from './components/Navbar';
 import { WalletModal } from './components/WalletModal';
+import { AuthModal } from './components/AuthModal';
 import { HomePage } from './pages/HomePage';
 import { ExplorePage } from './pages/ExplorePage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -19,8 +20,11 @@ export function App() {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   
-  const [wallet, setWallet] = useState<Wallet>({ balance: 2500, transactions: [] });
+  const [wallet, setWallet] = useState<Wallet>({ balance: 0, reservedBalance: 0, availableBalance: 0, transactions: [] });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMsg, setAuthModalMsg] = useState<string | undefined>(undefined);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Winner Reveal modal state
@@ -34,17 +38,61 @@ export function App() {
   const loadInitialData = async () => {
     const loadedGames = await fetchGames();
     setGames(loadedGames);
-    const loadedWallet = await fetchWallet();
-    setWallet(loadedWallet);
+
+    const token = localStorage.getItem('allin_auth_token');
+    if (token) {
+      const userProfile = await fetchUserProfileAPI();
+      if (userProfile) {
+        setCurrentUser(userProfile);
+        if (userProfile.role) setCurrentRole(userProfile.role);
+      }
+      const loadedWallet = await fetchWallet();
+      setWallet(loadedWallet);
+    }
   };
 
   useEffect(() => {
     loadInitialData();
+
+    // Real-time polling timer for wallet balance & session state sync (every 4s)
+    const interval = setInterval(() => {
+      const token = localStorage.getItem('allin_auth_token');
+      if (token) {
+        fetchWallet().then(w => setWallet(w));
+      }
+    }, 4000);
+
+    const handleWalletUpdate = () => {
+      const token = localStorage.getItem('allin_auth_token');
+      if (token) {
+        fetchWallet().then(w => setWallet(w));
+      }
+    };
+    window.addEventListener('allin_wallet_updated', handleWalletUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('allin_wallet_updated', handleWalletUpdate);
+    };
   }, []);
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleRequireAuth = (msg?: string) => {
+    setAuthModalMsg(msg || 'Please log in or register to perform this action.');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleLogout = async () => {
+    await logoutUserAPI();
+    setCurrentUser(null);
+    setCurrentRole('USER');
+    setWallet({ balance: 0, reservedBalance: 0, availableBalance: 0, transactions: [] });
+    setActiveTab('home');
+    triggerToast('Logged out successfully.');
   };
 
   const handleSelectGame = (game: Game) => {
@@ -54,8 +102,12 @@ export function App() {
   };
 
   const handleAddGame = async (newGame: Partial<Game>) => {
+    if (!currentUser) {
+      handleRequireAuth('You must be logged in as a Seller to post games.');
+      return;
+    }
+
     if (newGame.id) {
-      // RESUBMISSION of existing rejected post
       const updated = await updateGameAPI(newGame.id, {
         ...newGame,
         status: 'PENDING_APPROVAL',
@@ -71,48 +123,29 @@ export function App() {
       return;
     }
 
-    // Send POST payload to Django Backend REST API for new post
     const backendCreated = await createGameAPI({
       ...newGame,
       status: 'PENDING_APPROVAL'
     });
 
-    const created: Game = backendCreated || {
-      id: Date.now(),
-      product: newGame.product || {
-        id: Date.now(),
-        title: newGame.title || 'New Product',
-        category: 'Phones',
-        description: 'Seller listed item',
-        imageUrl: 'https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=600&q=80',
-        condition: 'NEW',
-        estimatedValue: 75000,
-        location: 'Addis Ababa',
-        approvalStatus: 'PENDING'
-      },
-      sellerName: 'Addis Tech Hub',
-      title: newGame.title || 'New Game Post',
-      gameType: newGame.gameType || 'TREASURE_BOX',
-      entryFee: newGame.entryFee || 200,
-      maxParticipants: newGame.maxParticipants || 100,
-      participantsCount: 0,
-      durationMinutes: newGame.durationMinutes || 1440,
-      targetTimeSec: newGame.targetTimeSec || 10.0,
-      rulesDescription: newGame.rulesDescription || 'Standard rules',
-      questionPrompt: newGame.questionPrompt,
-      status: 'PENDING_APPROVAL',
-      rejectionReason: '',
-      createdAt: new Date().toISOString()
-    };
-
-    setGames(prev => [created, ...prev]);
-    triggerToast(`Competition Post "${created.title}" submitted for Admin Approval!`);
+    if (backendCreated) {
+      setGames(prev => [backendCreated, ...prev]);
+      triggerToast(`Competition Post "${backendCreated.title}" submitted for Admin Approval!`);
+    } else {
+      triggerToast('Failed to create competition post.');
+    }
   };
 
   const handleApproveGame = async (gameId: number) => {
     setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'ACTIVE', rejectionReason: '' } : g));
     try {
-      await fetch(`http://localhost:8000/api/games/${gameId}/approve_game/`, { method: 'POST' });
+      await fetch(`http://localhost:8000/api/games/${gameId}/approve_game/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${localStorage.getItem('allin_auth_token')}`
+        }
+      });
     } catch (e) {}
     triggerToast('Game approved by admin and is now LIVE & ACTIVE!');
   };
@@ -122,7 +155,10 @@ export function App() {
     try {
       await fetch(`http://localhost:8000/api/games/${gameId}/reject_game/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${localStorage.getItem('allin_auth_token')}`
+        },
         body: JSON.stringify({ reason })
       });
     } catch (e) {}
@@ -133,18 +169,21 @@ export function App() {
     const targetGame = games.find(g => g.id === gameId);
     const res = await resolveGameAPI(gameId);
 
-    setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'COMPLETED', winnerName: res.winner || 'User_Abebe' } : g));
+    if (res.success) {
+      setGames(prev => prev.map(g => g.id === gameId ? { ...g, status: 'COMPLETED', winnerName: res.winner || 'Winner' } : g));
 
-    if (targetGame) {
-      setResolvedWinnerModal({
-        game: targetGame,
-        winnerName: res.winner || 'User_Abebe',
-        winningValue: res.winner ? 'Box #47' : 'Lowest Unique #3',
-        details: res.details || res.message
-      });
+      if (targetGame) {
+        setResolvedWinnerModal({
+          game: targetGame,
+          winnerName: res.winner || 'Winner',
+          winningValue: res.winner ? 'Official Winning Entry' : 'Draw Result',
+          details: res.details || res.message
+        });
+      }
+      triggerToast('🏆 Backend Game Engine resolved game! Winner revealed.');
+    } else {
+      triggerToast(res.message || 'Failed to resolve game.');
     }
-
-    triggerToast('🏆 Backend Game Engine resolved game! Winner revealed.');
   };
 
   return (
@@ -153,11 +192,37 @@ export function App() {
       {/* Top Navbar */}
       <Navbar
         currentRole={currentRole}
+        currentUser={currentUser}
         onRoleChange={setCurrentRole}
-        walletBalance={wallet.balance}
-        onOpenWallet={() => setIsWalletOpen(true)}
+        walletBalance={wallet.availableBalance ?? wallet.balance}
+        onOpenWallet={() => {
+          if (!currentUser) {
+            handleRequireAuth('Please sign in to access your wallet.');
+          } else {
+            setIsWalletOpen(true);
+          }
+        }}
+        onOpenAuthModal={() => {
+          setAuthModalMsg(undefined);
+          setIsAuthModalOpen(true);
+        }}
+        onLogout={handleLogout}
         activeTab={activeTab}
         onTabChange={(tab) => {
+          if (tab === 'dashboard' && !currentUser) {
+            handleRequireAuth('Please sign in to access your Account Hub.');
+            return;
+          }
+          if (tab === 'seller' && (!currentUser || (currentRole !== 'SELLER' && currentRole !== 'ADMIN'))) {
+            if (!currentUser) handleRequireAuth('Please sign in to access Seller Hub.');
+            else triggerToast('Seller role required to access Seller Hub.');
+            return;
+          }
+          if (tab === 'admin' && (!currentUser || currentRole !== 'ADMIN')) {
+            if (!currentUser) handleRequireAuth('Admin login required.');
+            else triggerToast('Admin access restricted to Super Admin role.');
+            return;
+          }
           setActiveTab(tab);
           if (tab !== 'detail') setSelectedGame(null);
         }}
@@ -202,14 +267,17 @@ export function App() {
               setActiveTab('explore');
               setSelectedGame(null);
             }}
-            walletBalance={wallet.balance}
+            walletBalance={wallet.availableBalance ?? wallet.balance}
             onRefreshWallet={loadInitialData}
             onDeductWallet={(fee) => {
               const newBal = deductWalletBalance(fee);
-              setWallet(prev => ({ ...prev, balance: newBal }));
+              setWallet(prev => ({ ...prev, balance: newBal, availableBalance: Math.max(0, newBal - prev.reservedBalance) }));
               return newBal;
             }}
-            onOpenWallet={() => setIsWalletOpen(true)}
+            onOpenWallet={() => {
+              if (!currentUser) handleRequireAuth('Please sign in to access wallet.');
+              else setIsWalletOpen(true);
+            }}
             onUpdateGame={(updated) => {
               setSelectedGame(updated);
               setGames(prev => prev.map(g => g.id === updated.id ? updated : g));
@@ -224,14 +292,14 @@ export function App() {
           />
         )}
 
-        {activeTab === 'seller' && (
+        {activeTab === 'seller' && (currentRole === 'SELLER' || currentRole === 'ADMIN') && (
           <SellerDashboardPage
             games={games}
             onAddGame={handleAddGame}
           />
         )}
 
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && currentRole === 'ADMIN' && (
           <AdminDashboardPage
             games={games}
             onApproveGame={handleApproveGame}
@@ -251,6 +319,24 @@ export function App() {
         />
       )}
 
+      {/* Auth Modal */}
+      {isAuthModalOpen && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          initialMessage={authModalMsg}
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setAuthModalMsg(undefined);
+          }}
+          onSuccess={(user, role) => {
+            setCurrentUser(user);
+            setCurrentRole(role);
+            loadInitialData();
+            triggerToast(`Welcome back, ${user.username}!`);
+          }}
+        />
+      )}
+
       {/* Winner Reveal Celebration Modal */}
       {resolvedWinnerModal && (
         <WinnerRevealModal
@@ -264,7 +350,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500 font-mono">
-        AddisGigs Games Platform Architecture • Developer 2 Module Active
+        AddisGigs Games Platform Architecture • Real-Time Notification & RBAC Engine Active
       </footer>
 
     </div>

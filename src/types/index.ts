@@ -5,7 +5,9 @@ export type GameType =
   | 'LOWEST_UNIQUE'
   | 'HIGHEST_CARD'
   | 'SECRET_NUMBER'
-  | 'PRECISION_TIMER';
+  | 'PRECISION_TIMER'
+  | 'HEAD_TO_HEAD'
+  | 'TOURNAMENT';
 
 export type GameStatus = 
   | 'DRAFT'
@@ -37,6 +39,7 @@ export interface Category {
 }
 
 export type PaymentStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
+export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export type DeliveryStatus = 
   | 'PREPARING'
@@ -51,7 +54,32 @@ export interface User {
   email: string;
   role: Role;
   accountStatus: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
-  telegramUsername?: string;
+  phoneNumber?: string;
+  bio?: string;
+  avatarUrl?: string;
+  notificationPreferences?: Record<string, boolean>;
+  privacySettings?: Record<string, boolean>;
+  language?: string;
+}
+
+export interface UserAdminRecord {
+  id: number;
+  username: string;
+  email: string;
+  role: Role;
+  accountStatus: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+  isActive: boolean;
+  dateJoined: string;
+  phoneNumber?: string;
+}
+
+export interface UserStats {
+  gamesPlayed: number;
+  gamesWon: number;
+  gamesLost: number;
+  winRate: number;
+  totalEntries: number;
+  totalSpent: number;
 }
 
 export interface Seller {
@@ -92,6 +120,7 @@ export interface Game {
   createdAt: string;
   isFeatured?: boolean;
   isRecommended?: boolean;
+  isFavorited?: boolean;
   viewsCount?: number;
   questionPrompt?: string;
   targetTimeSec?: number;
@@ -128,6 +157,17 @@ export interface WinnerRecord {
   calculatedAt: string;
 }
 
+export interface Favorite {
+  id: number;
+  gameId: number;
+  gameTitle: string;
+  productImage: string;
+  entryFee: number;
+  gameType: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface GameFilterState {
   searchQuery: string;
   category: string;
@@ -152,6 +192,8 @@ export interface GameStatisticsData {
 export interface WalletTransaction {
   id: number;
   transactionType: 'DEPOSIT' | 'GAME_ENTRY' | 'REFUND' | 'WITHDRAWAL' | 'REWARD';
+  direction?: 'CREDIT' | 'DEBIT';
+  status?: 'COMPLETED' | 'PENDING' | 'REJECTED' | 'CANCELLED';
   amount: number;
   referenceId: string;
   note: string;
@@ -160,6 +202,8 @@ export interface WalletTransaction {
 
 export interface Wallet {
   balance: number;
+  reservedBalance: number;
+  availableBalance: number;
   transactions: WalletTransaction[];
 }
 
@@ -174,6 +218,30 @@ export interface PaymentSubmission {
   status: PaymentStatus;
   adminNote?: string;
   submittedAt: string;
+}
+
+export interface WithdrawalRequest {
+  id: number;
+  userId: number;
+  username: string;
+  withdrawalMethod: string;
+  accountNumber: string;
+  accountName?: string;
+  phoneNumber?: string;
+  amount: number;
+  transactionId: string;
+  status: WithdrawalStatus;
+  adminNote?: string;
+  submittedAt: string;
+}
+
+export interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  eventType: 'DEPOSIT' | 'WITHDRAWAL' | 'GAME_EVENT' | 'GAME_WIN' | 'GAME_LOSS' | 'REFUND' | 'SYSTEM';
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface ProductDelivery {
@@ -195,5 +263,18 @@ export interface AnalyticsSummary {
   completedGames: number;
   totalGameEntries: number;
   totalDepositsApproved: number;
+  totalWithdrawalsApproved?: number;
   totalProducts: number;
+}
+
+export interface HistoryRecord {
+  id: string;
+  date: string;
+  type: 'GAME' | 'DEPOSIT' | 'WITHDRAWAL' | 'REFUND' | 'REWARD';
+  title: string;
+  amount: number;
+  direction: 'CREDIT' | 'DEBIT';
+  status: string;
+  referenceId: string;
+  details?: string;
 }

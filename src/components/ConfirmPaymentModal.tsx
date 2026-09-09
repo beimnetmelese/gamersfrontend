@@ -25,12 +25,15 @@ export const ConfirmPaymentModal: React.FC<ConfirmPaymentModalProps> = ({
   const newBalance = Math.max(0, currentBalance - entryFee);
 
   const modalContent = (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose(); }}
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn"
+    >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0, y: 0 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 0 }}
-        className="glass-panel max-w-md w-full p-6 sm:p-7 space-y-5 border border-amber-500/40 rounded-3xl shadow-2xl shadow-amber-950/60 relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 my-auto"
+        className="bg-slate-900 max-w-md w-full p-6 sm:p-7 space-y-5 border border-slate-700/80 rounded-3xl shadow-2xl relative overflow-hidden my-auto"
       >
         <button 
           onClick={onClose} 

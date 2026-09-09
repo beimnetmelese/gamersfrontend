@@ -1,6 +1,30 @@
-import type { Game, Product, Wallet, Category, WinnerRecord, GameFilterState, GameStatisticsData } from '../types';
+import type {
+  Game, Product, Wallet, Category, WinnerRecord, GameFilterState,
+  GameStatisticsData, User, UserStats, Favorite, Notification,
+  PaymentSubmission, WithdrawalRequest, UserAdminRecord, HistoryRecord
+} from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('allin_auth_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+  return headers;
+};
+
+const getAuthMultipartHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('allin_auth_token');
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+  return headers;
+};
 
 export const MOCK_CATEGORIES: Category[] = [
   { id: 1, name: 'Phones', slug: 'phones', icon: 'smartphone', description: 'Smartphones, iPhones, and mobile devices', gameCount: 14 },
@@ -13,194 +37,20 @@ export const MOCK_CATEGORIES: Category[] = [
   { id: 8, name: 'Other', slug: 'other', icon: 'package', description: 'Gift cards, vouchers, collectibles, and novelty items', gameCount: 7 },
 ];
 
-export const MOCK_PRODUCTS: Product[] = [
-  {
-    id: 1,
-    title: "PlayStation 5 Digital Edition (Slim)",
-    category: "Gaming",
-    description: "Brand new 1TB PS5 Digital Edition console with extra DualSense controller.",
-    imageUrl: "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 65000,
-    location: "Bole, Addis Ababa",
-    approvalStatus: "APPROVED"
-  },
-  {
-    id: 2,
-    title: "iPhone 15 Pro Max - 256GB Natural Titanium",
-    category: "Phones",
-    description: "Unopened sealed box iPhone 15 Pro Max with official warranty.",
-    imageUrl: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 145000,
-    location: "Kazanchis, Addis Ababa",
-    approvalStatus: "APPROVED"
-  },
-  {
-    id: 3,
-    title: "Apple MacBook Pro 14 M3 Chip",
-    category: "Laptops",
-    description: "M3 chip, 16GB Unified Memory, 512GB SSD Space Gray.",
-    imageUrl: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 185000,
-    location: "Piassa, Addis Ababa",
-    approvalStatus: "APPROVED"
-  },
-  {
-    id: 4,
-    title: "Sony WH-1000XM5 Wireless Headphones",
-    category: "Electronics",
-    description: "Industry-leading noise canceling wireless over-ear headphones.",
-    imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 28000,
-    location: "Sarbet, Addis Ababa",
-    approvalStatus: "APPROVED"
-  },
-  {
-    id: 5,
-    title: "Rolex Submariner Date Luxury Watch",
-    category: "Fashion",
-    description: "Oystersteel luxury timepiece with black dial and ceramic bezel.",
-    imageUrl: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 650000,
-    location: "Bole Medhanialem, Addis Ababa",
-    approvalStatus: "APPROVED"
-  },
-  {
-    id: 6,
-    title: "Segway Ninebot Max G30 Electric Scooter",
-    category: "Vehicles",
-    description: "65km long range electric commuter scooter with dual brakes.",
-    imageUrl: "https://images.unsplash.com/photo-1588854337221-4cf9fa96059c?auto=format&fit=crop&w=600&q=80",
-    condition: "NEW",
-    estimatedValue: 58000,
-    location: "CMC, Addis Ababa",
-    approvalStatus: "APPROVED"
-  }
-];
-
-export const MOCK_GAMES: Game[] = [
-  {
-    id: 1,
-    product: MOCK_PRODUCTS[0],
-    sellerName: "Addis Tech Hub",
-    title: "PS5 Slim - Treasure Box Challenge",
-    gameType: "TREASURE_BOX",
-    entryFee: 500,
-    maxParticipants: 100,
-    participantsCount: 42,
-    totalBoxes: 100,
-    durationMinutes: 180,
-    rulesDescription: "Choose 1 available box out of 100. When timer ends, backend randomly selects one box chosen by a player. The player holding that box wins the PS5!",
-    status: "ACTIVE",
-    isFeatured: true,
-    isRecommended: true,
-    viewsCount: 1420,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 2,
-    product: MOCK_PRODUCTS[1],
-    sellerName: "Titanium Electronics",
-    title: "iPhone 15 Pro - Lowest Unique Number",
-    gameType: "LOWEST_UNIQUE",
-    entryFee: 1000,
-    maxParticipants: 50,
-    participantsCount: 28,
-    durationMinutes: 240,
-    rulesDescription: "Submit a positive integer. Duplicate numbers submitted by multiple users are eliminated. The lowest unique number wins!",
-    status: "ACTIVE",
-    isFeatured: true,
-    viewsCount: 2100,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 3,
-    product: MOCK_PRODUCTS[2],
-    sellerName: "MacCenter Ethiopia",
-    title: "MacBook Pro M3 - Secret Number Guess",
-    gameType: "SECRET_NUMBER",
-    entryFee: 1500,
-    maxParticipants: 30,
-    participantsCount: 15,
-    durationMinutes: 120,
-    rulesDescription: "The backend stored a secret target number (1-500). Submit your guess. The participant closest to the target wins!",
-    status: "ACTIVE",
-    isRecommended: true,
-    viewsCount: 890,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 4,
-    product: MOCK_PRODUCTS[3],
-    sellerName: "AudioZone",
-    title: "Sony Headphones - Precision Timer",
-    gameType: "PRECISION_TIMER",
-    entryFee: 200,
-    maxParticipants: 60,
-    participantsCount: 35,
-    durationMinutes: 90,
-    rulesDescription: "Hit Start and click Stop as close as possible to 10.000 seconds. Smallest time difference wins!",
-    status: "ACTIVE",
-    viewsCount: 640,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 5,
-    product: MOCK_PRODUCTS[4],
-    sellerName: "Luxury Timepieces",
-    title: "Rolex Submariner - Highest Unique Card",
-    gameType: "HIGHEST_CARD",
-    entryFee: 2500,
-    maxParticipants: 52,
-    participantsCount: 19,
-    durationMinutes: 300,
-    rulesDescription: "Draw/pick a playing card from the deck. Duplicates are eliminated. The highest unique card rank wins!",
-    status: "ACTIVE",
-    isFeatured: true,
-    viewsCount: 3400,
-    createdAt: new Date().toISOString()
-  }
-];
-
-export const MOCK_WINNERS: WinnerRecord[] = [
-  {
-    id: 101,
-    gameId: 12,
-    gameTitle: "PlayStation 5 Console Giveaway",
-    winnerName: "User_Abebe",
-    winningValue: "Box #47",
-    productTitle: "PlayStation 5 Console",
-    productImage: "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=600&q=80",
-    calculatedAt: new Date(Date.now() - 3600000 * 2).toISOString()
-  },
-  {
-    id: 102,
-    gameId: 15,
-    gameTitle: "iPhone 15 Pro Max Lowest Unique",
-    winnerName: "User_Tigist",
-    winningValue: "Number 3",
-    productTitle: "iPhone 15 Pro Max",
-    productImage: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=600&q=80",
-    calculatedAt: new Date(Date.now() - 3600000 * 6).toISOString()
-  },
-  {
-    id: 103,
-    gameId: 19,
-    gameTitle: "MacBook Pro M3 Precision Timer",
-    winnerName: "User_Sami",
-    winningValue: "Delta: +4ms",
-    productTitle: "MacBook Pro M3",
-    productImage: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80",
-    calculatedAt: new Date(Date.now() - 3600000 * 18).toISOString()
-  }
-];
-
 export const normalizeProduct = (raw: any): Product => {
-  if (!raw) return MOCK_PRODUCTS[0];
+  if (!raw) {
+    return {
+      id: 1,
+      title: 'Product Item',
+      category: 'Electronics',
+      description: 'Standard product description',
+      imageUrl: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=600&q=80',
+      condition: 'NEW',
+      estimatedValue: 50000,
+      location: 'Addis Ababa',
+      approvalStatus: 'APPROVED'
+    };
+  }
   return {
     id: raw.id || 1,
     title: raw.title || 'Product',
@@ -215,29 +65,7 @@ export const normalizeProduct = (raw: any): Product => {
 };
 
 export const normalizeGame = (raw: any): Game => {
-  if (!raw) return MOCK_GAMES[0];
   const prodRaw = raw.product_details || raw.product || {};
-  
-  let storedCount = 0;
-  let storedViews = 0;
-  try {
-    const savedStr = localStorage.getItem(`allin_game_participants_${raw.id}`);
-    if (savedStr) {
-      const savedList = JSON.parse(savedStr);
-      storedCount = savedList.length;
-    }
-    const savedViewsStr = localStorage.getItem(`allin_game_views_${raw.id}`);
-    if (savedViewsStr) {
-      storedViews = parseInt(savedViewsStr);
-    }
-  } catch (e) {}
-
-  const baseCount = parseInt(raw.participants_count || raw.participantsCount || (raw.participants ? raw.participants.length : 0));
-  const finalParticipantsCount = Math.max(baseCount, storedCount);
-
-  const baseViews = parseInt(raw.views_count || raw.viewsCount || 0);
-  const finalViewsCount = Math.max(baseViews, storedViews);
-
   return {
     id: raw.id,
     product: normalizeProduct(prodRaw),
@@ -246,20 +74,20 @@ export const normalizeGame = (raw: any): Game => {
     gameType: raw.game_type || raw.gameType || 'TREASURE_BOX',
     entryFee: typeof raw.entry_fee === 'string' ? parseFloat(raw.entry_fee) : (raw.entry_fee || raw.entryFee || 0),
     maxParticipants: parseInt(raw.max_participants || raw.maxParticipants || 100),
-    participantsCount: finalParticipantsCount,
-    totalBoxes: Math.max(parseInt(raw.total_boxes || raw.totalBoxes || 0), parseInt(raw.max_participants || raw.maxParticipants || 100), 1),
+    participantsCount: parseInt(raw.participants_count || raw.participantsCount || 0),
+    totalBoxes: Math.max(parseInt(raw.total_boxes || raw.totalBoxes || 0), 100),
     durationMinutes: raw.duration_minutes || raw.durationMinutes || 120,
     rulesDescription: raw.rules_description || raw.rulesDescription || 'Standard rules',
     status: raw.status || 'ACTIVE',
     createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
     isFeatured: raw.is_featured ?? raw.isFeatured ?? false,
     isRecommended: raw.is_recommended ?? raw.isRecommended ?? false,
-    viewsCount: finalViewsCount,
+    isFavorited: raw.is_favorited ?? raw.isFavorited ?? false,
+    viewsCount: parseInt(raw.views_count || raw.viewsCount || 0),
     questionPrompt: raw.question_prompt || raw.questionPrompt,
     targetTimeSec: parseFloat(raw.target_time_sec || raw.targetTimeSec || 10.000),
-    winnerName: raw.winner_name || raw.winnerName || (raw.winner ? (typeof raw.winner === 'string' ? raw.winner : raw.winner.username) : undefined) || (raw.result ? (raw.result.winner ? (typeof raw.result.winner === 'string' ? raw.result.winner : raw.result.winner.username) : raw.result.winner_name) : undefined),
-    winningValue: raw.winning_value || raw.winningValue || (raw.result ? raw.result.winning_value : undefined),
-    bracketData: raw.bracket_data || raw.bracketData,
+    winnerName: raw.winner_name || raw.winnerName,
+    winningValue: raw.winning_value || raw.winningValue,
     participants: (raw.participants || []).map((p: any) => ({
       id: p.id,
       gameId: p.game || p.gameId,
@@ -275,18 +103,653 @@ export const normalizeGame = (raw: any): Game => {
   };
 };
 
+// --- AUTHENTICATION APIS ---
+
+export const loginUserAPI = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string; user?: User; wallet?: Wallet; token?: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username_or_email: usernameOrEmail, password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.token) localStorage.setItem('allin_auth_token', data.token);
+      localStorage.setItem('allin_auth_user', JSON.stringify(data.user));
+      return { success: true, message: data.message, user: data.user, wallet: data.wallet, token: data.token };
+    }
+    return { success: false, message: data.error || 'Login failed.' };
+  } catch (err) {
+    return { success: false, message: 'Network error connecting to backend.' };
+  }
+};
+
+export const registerUserAPI = async (username: string, email: string, password: string, role: string = 'USER'): Promise<{ success: boolean; message: string; user?: User; wallet?: Wallet; token?: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/register/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password, role })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.token) localStorage.setItem('allin_auth_token', data.token);
+      localStorage.setItem('allin_auth_user', JSON.stringify(data.user));
+      return { success: true, message: data.message, user: data.user, wallet: data.wallet, token: data.token };
+    }
+    return { success: false, message: data.error || 'Registration failed.' };
+  } catch (err) {
+    return { success: false, message: 'Network error connecting to backend.' };
+  }
+};
+
+export const logoutUserAPI = async (): Promise<boolean> => {
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+  } catch (e) {}
+  localStorage.removeItem('allin_auth_token');
+  localStorage.removeItem('allin_auth_user');
+  return true;
+};
+
+// --- USER PROFILE & SETTINGS APIS ---
+
+export const fetchUserProfileAPI = async (): Promise<User | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        role: data.role || 'USER',
+        accountStatus: data.account_status || 'ACTIVE',
+        phoneNumber: data.phone_number || '',
+        bio: data.bio || '',
+        avatarUrl: data.avatar_url || '',
+        notificationPreferences: data.notification_preferences || {},
+        privacySettings: data.privacy_settings || {},
+        language: data.language || 'en'
+      };
+    }
+  } catch (e) {}
+  return null;
+};
+
+export const updateUserProfileAPI = async (profileData: Partial<User>): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        username: profileData.username,
+        bio: profileData.bio,
+        avatar_url: profileData.avatarUrl,
+        phone_number: profileData.phoneNumber,
+        notification_preferences: profileData.notificationPreferences,
+        privacy_settings: profileData.privacySettings,
+        language: profileData.language
+      })
+    });
+    if (res.ok) return { success: true, message: "Profile updated successfully!" };
+    const err = await res.json();
+    return { success: false, message: err.error || "Failed to update profile." };
+  } catch (e) {
+    return { success: false, message: "Network error updating profile." };
+  }
+};
+
+export const changePasswordAPI = async (oldPassword: string, newPassword: string, confirmPassword: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/change_password/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword, confirm_password: confirmPassword })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || "Password changed successfully!" };
+    return { success: false, message: data.error || "Failed to change password." };
+  } catch (e) {
+    return { success: false, message: "Network error changing password." };
+  }
+};
+
+export const applySellerAPI = async (businessName: string, phoneNumber: string, address: string, description: string = ''): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/apply/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ business_name: businessName, phone_number: phoneNumber, address, description })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || "Seller application submitted! Pending Admin verification." };
+    return { success: false, message: data.error || "Failed to submit seller application." };
+  } catch (e) {
+    return { success: false, message: "Network error submitting seller application." };
+  }
+};
+
+export const fetchPendingSellersAPI = async (): Promise<any[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/pending/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return [];
+};
+
+export const approveAdminSellerAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/${id}/approve/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message };
+    return { success: false, message: data.error || "Failed to approve seller application." };
+  } catch (e) {
+    return { success: false, message: "Network error approving seller." };
+  }
+};
+
+export const rejectAdminSellerAPI = async (id: number, reason: string = 'Rejected'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/${id}/reject/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message };
+    return { success: false, message: data.error || "Failed to reject seller application." };
+  } catch (e) {
+    return { success: false, message: "Network error rejecting seller." };
+  }
+};
+
+
+export const fetchUserStatsAPI = async (): Promise<UserStats> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/stats/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        gamesPlayed: data.games_played || 0,
+        gamesWon: data.games_won || 0,
+        gamesLost: data.games_lost || 0,
+        winRate: data.win_rate || 0.0,
+        totalEntries: data.total_entries || 0,
+        totalSpent: data.total_spent || 0.0
+      };
+    }
+  } catch (e) {}
+  return { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, winRate: 0.0, totalEntries: 0, totalSpent: 0.0 };
+};
+
+// --- MY GAMES & GAME APIS ---
+
 export const fetchGames = async (page: number = 1): Promise<Game[]> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/games/?page=${page}&page_size=20`);
+    const res = await fetch(`${API_BASE_URL}/games/?page=${page}&page_size=30`);
     if (res.ok) {
       const data = await res.json();
       const rawList = Array.isArray(data) ? data : (data.results || []);
-      return rawList.length > 0 ? rawList.map(normalizeGame) : MOCK_GAMES;
+      return rawList.map(normalizeGame);
     }
+  } catch (err) {}
+  return [];
+};
+
+export const fetchMyGamesAPI = async (statusFilter: string = 'ALL'): Promise<Game[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/my_games/?status=${statusFilter}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.map(normalizeGame);
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const joinGameAPI = async (gameId: number, selectionData: Record<string, any>): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/${gameId}/join_game/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(selectionData)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message || "Joined game successfully!" };
+    }
+    return { success: false, message: data.error || 'Failed to join game.' };
   } catch (err) {
-    console.warn("Backend API offline, using fallback state:", err);
+    return { success: false, message: 'Network error trying to join game.' };
   }
-  return MOCK_GAMES;
+};
+
+export const createGameAPI = async (newGame: Partial<Game>): Promise<Game | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(newGame)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return normalizeGame(data);
+    }
+  } catch (err) {}
+  return null;
+};
+
+export const updateGameAPI = async (gameId: number, updatedGame: Partial<Game>): Promise<Game | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/${gameId}/`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ...updatedGame, status: 'PENDING_APPROVAL', rejection_reason: '' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return normalizeGame(data);
+    }
+  } catch (err) {}
+  return null;
+};
+
+export const resolveGameAPI = async (gameId: number): Promise<{ success: boolean; winner?: string; details?: string; message?: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/${gameId}/resolve_game/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) return await res.json();
+    const data = await res.json();
+    return { success: false, message: data.error || "Failed to resolve game." };
+  } catch (e) {
+    return { success: false, message: "Network error resolving game." };
+  }
+};
+
+// --- FAVORITES APIS ---
+
+export const fetchFavoritesAPI = async (): Promise<Favorite[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/favorites/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((f: any) => ({
+        id: f.id,
+        gameId: f.game,
+        gameTitle: f.game_title,
+        productImage: f.product_image,
+        entryFee: parseFloat(f.entry_fee || 0),
+        gameType: f.game_type,
+        status: f.status,
+        createdAt: f.created_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const toggleFavoriteAPI = async (gameId: number): Promise<{ success: boolean; isFavorited?: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/favorites/toggle/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ game_id: gameId })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, isFavorited: data.is_favorited, message: data.message };
+    return { success: false, message: data.error || 'Failed to update favorite.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating favorite.' };
+  }
+};
+
+// --- NOTIFICATIONS APIS ---
+
+export const fetchNotificationsAPI = async (): Promise<Notification[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/notifications/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        eventType: n.event_type || n.eventType,
+        isRead: n.is_read ?? n.isRead,
+        createdAt: n.created_at || n.createdAt
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const markNotificationReadAPI = async (id: number): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/notifications/${id}/mark_read/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return res.ok;
+  } catch (e) {}
+  return false;
+};
+
+export const markAllNotificationsReadAPI = async (): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/notifications/mark_all_read/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return res.ok;
+  } catch (e) {}
+  return false;
+};
+
+// --- WALLET, DEPOSIT & WITHDRAWAL APIS ---
+
+export const fetchWallet = async (): Promise<Wallet> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/wallets/me/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const bal = parseFloat(data.balance || 0);
+      const resBal = parseFloat(data.reserved_balance || 0);
+      const avail = parseFloat(data.available_balance || (bal - resBal));
+
+      return {
+        balance: bal,
+        reservedBalance: resBal,
+        availableBalance: avail,
+        transactions: (data.transactions || []).map((t: any) => ({
+          id: t.id,
+          transactionType: t.transaction_type || t.transactionType,
+          direction: t.direction,
+          status: t.status,
+          amount: parseFloat(t.amount),
+          referenceId: t.reference_id || t.referenceId,
+          note: t.note,
+          createdAt: t.created_at || t.createdAt
+        }))
+      };
+    }
+  } catch (err) {}
+
+  return { balance: 0, reservedBalance: 0, availableBalance: 0, transactions: [] };
+};
+
+export const fetchUserHistoryAPI = async (): Promise<HistoryRecord[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/wallets/history/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const records: HistoryRecord[] = [];
+
+      (data.transactions || []).forEach((t: any) => {
+        records.push({
+          id: `TX-${t.id}`,
+          date: t.created_at,
+          type: t.transaction_type,
+          title: t.note || `${t.transaction_type} Ledger Entry`,
+          amount: Math.abs(parseFloat(t.amount)),
+          direction: t.direction || (t.amount >= 0 ? 'CREDIT' : 'DEBIT'),
+          status: t.status || 'COMPLETED',
+          referenceId: t.reference_id || `#${t.id}`,
+          details: `Ledger Record: ${t.note}`
+        });
+      });
+
+      return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const submitPaymentProof = async (formData: FormData): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/`, {
+      method: 'POST',
+      headers: getAuthMultipartHeaders(),
+      body: formData
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message || "Deposit proof submitted! Pending Admin verification." };
+    }
+    return { success: false, message: data.error || "Deposit submission failed." };
+  } catch (err) {
+    return { success: false, message: "Network error submitting deposit proof." };
+  }
+};
+
+export const submitWithdrawalRequestAPI = async (data: { withdrawalMethod: string; accountNumber: string; accountName?: string; phoneNumber?: string; amount: number }): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/withdrawals/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        withdrawal_method: data.withdrawalMethod,
+        account_number: data.accountNumber,
+        account_name: data.accountName,
+        phone_number: data.phoneNumber,
+        amount: data.amount
+      })
+    });
+    const resData = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: resData.message || "Withdrawal request submitted! Funds reserved pending admin payout." };
+    }
+    return { success: false, message: resData.error || "Withdrawal request failed." };
+  } catch (err) {
+    return { success: false, message: "Network error creating withdrawal request." };
+  }
+};
+
+// --- ADMIN MANAGEMENT APIS ---
+
+export const fetchAdminDepositsAPI = async (statusFilter: string = 'PENDING'): Promise<PaymentSubmission[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/?status=${statusFilter}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((p: any) => ({
+        id: p.id,
+        userId: p.user,
+        username: p.username || 'User',
+        paymentMethod: p.payment_method,
+        transactionId: p.transaction_id,
+        amount: parseFloat(p.amount),
+        proofImageUrl: p.proof_image ? (p.proof_image.startsWith('http') ? p.proof_image : `http://localhost:8000${p.proof_image}`) : undefined,
+        status: p.status,
+        adminNote: p.admin_note,
+        submittedAt: p.submitted_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const approveAdminDepositAPI = async (id: number, adminNote: string = 'Approved'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/${id}/approve/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ admin_note: adminNote })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message };
+    }
+    return { success: false, message: data.error || 'Failed to approve deposit.' };
+  } catch (e) {
+    return { success: false, message: 'Network error approving deposit.' };
+  }
+};
+
+export const rejectAdminDepositAPI = async (id: number, adminNote: string = 'Rejected'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/${id}/reject/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ admin_note: adminNote })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message };
+    }
+    return { success: false, message: data.error || 'Failed to reject deposit.' };
+  } catch (e) {
+    return { success: false, message: 'Network error rejecting deposit.' };
+  }
+};
+
+export const fetchAdminWithdrawalsAPI = async (statusFilter: string = 'PENDING'): Promise<WithdrawalRequest[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/withdrawals/?status=${statusFilter}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((w: any) => ({
+        id: w.id,
+        userId: w.user,
+        username: w.username || 'User',
+        withdrawalMethod: w.withdrawal_method,
+        accountNumber: w.account_number,
+        accountName: w.account_name,
+        phoneNumber: w.phone_number,
+        amount: parseFloat(w.amount),
+        transactionId: w.transaction_id,
+        status: w.status,
+        adminNote: w.admin_note,
+        submittedAt: w.submitted_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const approveAdminWithdrawalAPI = async (id: number, adminNote: string = 'Approved'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/withdrawals/${id}/approve/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ admin_note: adminNote })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message };
+    }
+    return { success: false, message: data.error || 'Failed to approve withdrawal.' };
+  } catch (e) {
+    return { success: false, message: 'Network error approving withdrawal.' };
+  }
+};
+
+export const rejectAdminWithdrawalAPI = async (id: number, adminNote: string = 'Rejected'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/withdrawals/${id}/reject/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ admin_note: adminNote })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, message: data.message };
+    }
+    return { success: false, message: data.error || 'Failed to reject withdrawal.' };
+  } catch (e) {
+    return { success: false, message: 'Network error rejecting withdrawal.' };
+  }
+};
+
+export const fetchAdminUsersAPI = async (): Promise<UserAdminRecord[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        accountStatus: u.account_status,
+        isActive: u.is_active,
+        dateJoined: u.date_joined,
+        phoneNumber: u.phone_number
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const toggleAdminUserStatusAPI = async (userId: number, status: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/toggle_status/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message };
+    return { success: false, message: data.error || 'Failed to change status.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating user status.' };
+  }
+};
+
+export const changeAdminUserRoleAPI = async (userId: number, role: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/change_role/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ role })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message };
+    return { success: false, message: data.error || 'Failed to change role.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating user role.' };
+  }
 };
 
 export const fetchCategories = async (): Promise<Category[]> => {
@@ -296,80 +759,8 @@ export const fetchCategories = async (): Promise<Category[]> => {
       const data = await res.json();
       return data.length > 0 ? data : MOCK_CATEGORIES;
     }
-  } catch (err) {
-    console.warn("Backend categories API offline, fallback used");
-  }
+  } catch (err) {}
   return MOCK_CATEGORIES;
-};
-
-export const fetchFeaturedGames = async (): Promise<Game[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/featured/`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.map(normalizeGame);
-    }
-  } catch (e) {}
-  return MOCK_GAMES.filter(g => g.isFeatured);
-};
-
-export const fetchLiveGames = async (): Promise<Game[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/live/`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.map(normalizeGame);
-    }
-  } catch (e) {}
-  return MOCK_GAMES.filter(g => g.status === 'ACTIVE');
-};
-
-export const fetchEndingSoonGames = async (): Promise<Game[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/ending_soon/`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.map(normalizeGame);
-    }
-  } catch (e) {}
-  return MOCK_GAMES.filter(g => g.status === 'ACTIVE');
-};
-
-export const fetchPopularGames = async (): Promise<Game[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/popular/`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.map(normalizeGame);
-    }
-  } catch (e) {}
-  return [...MOCK_GAMES].sort((a, b) => (b.viewsCount || 0) - (a.viewsCount || 0));
-};
-
-export const fetchWinnersHistory = async (): Promise<WinnerRecord[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/winners/`);
-    if (res.ok) return await res.json();
-  } catch (e) {}
-  return MOCK_WINNERS;
-};
-
-export const fetchGameStatistics = async (gameId: number): Promise<GameStatisticsData> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/${gameId}/statistics/`);
-    if (res.ok) return await res.json();
-  } catch (e) {}
-  const target = MOCK_GAMES.find(g => g.id === gameId) || MOCK_GAMES[0];
-  return {
-    gameId: target.id,
-    viewsCount: target.viewsCount || 120,
-    participantsCount: target.participantsCount,
-    maxParticipants: target.maxParticipants,
-    completionRate: Math.round((target.participantsCount / target.maxParticipants) * 100),
-    entryFee: target.entryFee,
-    prizeValue: target.product.estimatedValue,
-    status: target.status
-  };
 };
 
 export const searchGamesAPI = async (filters: GameFilterState, page: number = 1): Promise<Game[]> => {
@@ -385,44 +776,14 @@ export const searchGamesAPI = async (filters: GameFilterState, page: number = 1)
     params.append('page', page.toString());
     params.append('page_size', '20');
 
-    const res = await fetch(`${API_BASE_URL}/games/search/?${params.toString()}`);
+    const res = await fetch(`${API_BASE_URL}/games/?${params.toString()}`);
     if (res.ok) {
       const data = await res.json();
       const rawList = Array.isArray(data) ? data : (data.results || []);
       return rawList.map(normalizeGame);
     }
   } catch (e) {}
-
-  // Local filtering simulation
-  let result = [...MOCK_GAMES];
-  if (filters.searchQuery) {
-    const q = filters.searchQuery.toLowerCase();
-    result = result.filter(g => g.title.toLowerCase().includes(q) || g.product.title.toLowerCase().includes(q) || g.sellerName.toLowerCase().includes(q));
-  }
-  if (filters.category && filters.category !== 'ALL') {
-    result = result.filter(g => g.product.category.toLowerCase() === filters.category.toLowerCase());
-  }
-  if (filters.gameType && filters.gameType !== 'ALL') {
-    result = result.filter(g => g.gameType === filters.gameType);
-  }
-  if (filters.minEntryFee > 0) {
-    result = result.filter(g => g.entryFee >= filters.minEntryFee);
-  }
-  if (filters.maxEntryFee < 100000) {
-    result = result.filter(g => g.entryFee <= filters.maxEntryFee);
-  }
-  if (filters.status && filters.status !== 'ALL') {
-    result = result.filter(g => g.status === filters.status);
-  }
-  if (filters.sortBy === 'fee_low') {
-    result.sort((a, b) => a.entryFee - b.entryFee);
-  } else if (filters.sortBy === 'fee_high') {
-    result.sort((a, b) => b.entryFee - a.entryFee);
-  } else if (filters.sortBy === 'popular') {
-    result.sort((a, b) => (b.viewsCount || 0) - (a.viewsCount || 0));
-  }
-  const startIndex = (page - 1) * 20;
-  return result.slice(startIndex, startIndex + 20);
+  return [];
 };
 
 export const deductWalletBalance = (amount: number): number => {
@@ -437,174 +798,42 @@ export const deductWalletBalance = (amount: number): number => {
   }
 };
 
-export const fetchWallet = async (): Promise<Wallet> => {
-  const savedBalStr = localStorage.getItem('allin_wallet_balance');
-  const savedBal = savedBalStr !== null ? parseFloat(savedBalStr) : null;
-
+export const fetchGameStatistics = async (gameId: number): Promise<GameStatisticsData> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/wallets/1/`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data.balance !== 'undefined') {
-        const backendBal = typeof data.balance === 'string' ? parseFloat(data.balance) : data.balance;
-        const finalBal = (savedBal !== null && savedBal < backendBal) ? savedBal : backendBal;
-        localStorage.setItem('allin_wallet_balance', finalBal.toString());
-        return { ...data, balance: finalBal };
-      }
-      return data;
-    }
-  } catch (err) {}
-
-  const bal = savedBal !== null ? savedBal : 5000;
-  return {
-    balance: bal,
-    transactions: [
-      { id: 1, transactionType: 'DEPOSIT', amount: 5000, referenceId: 'TX987654', note: 'Wallet Balance', createdAt: new Date().toISOString() }
-    ]
-  };
-};
-
-export const joinGameAPI = async (gameId: number, selectionData: Record<string, any>): Promise<{ success: boolean; message: string }> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/${gameId}/join_game/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: 1, ...selectionData })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { success: true, message: data.message };
-    } else {
-      const data = await res.json();
-      return { success: false, message: data.error || 'Failed to join game.' };
-    }
-  } catch (err) {}
-
-  // Local fallback: update MOCK_GAMES and localStorage for page refresh persistence
-  const targetGame = MOCK_GAMES.find(g => g.id === gameId);
-  if (targetGame) {
-    if (!targetGame.participants) targetGame.participants = [];
-    const newRecord = {
-      id: Date.now(),
-      gameId: gameId,
-      userId: 1,
-      username: 'You',
-      selectedBox: selectionData.selected_box,
-      selectedNumber: selectionData.selected_number,
-      selectedCard: selectionData.selected_card,
-      timerDeltaMs: selectionData.timer_delta_ms,
-      joinedAt: new Date().toISOString()
-    };
-    targetGame.participants.push(newRecord);
-    targetGame.participantsCount = targetGame.participants.length;
-
-    try {
-      const storageKey = `allin_game_participants_${gameId}`;
-      const existingStr = localStorage.getItem(storageKey);
-      const list = existingStr ? JSON.parse(existingStr) : [];
-      list.push(newRecord);
-      localStorage.setItem(storageKey, JSON.stringify(list));
-    } catch (e) {}
-  }
-
-  return { success: true, message: "Joined game successfully! Entry fees locked and entry recorded." };
-};
-
-export const resolveGameAPI = async (gameId: number): Promise<{ success: boolean; winner?: string; details?: string; message?: string }> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/${gameId}/resolve_game/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (res.ok) {
-      return await res.json();
-    }
+    const res = await fetch(`${API_BASE_URL}/games/${gameId}/statistics/`);
+    if (res.ok) return await res.json();
   } catch (e) {}
   return {
-    success: true,
-    winner: "User_Abebe",
-    details: "🏆 Backend Game Engine evaluated all entries securely and declared the official winner!",
-    message: "Game resolved successfully!"
+    gameId,
+    viewsCount: 120,
+    participantsCount: 10,
+    maxParticipants: 100,
+    completionRate: 10,
+    entryFee: 100,
+    prizeValue: 50000,
+    status: 'ACTIVE'
   };
-};
-
-export const submitPaymentProof = async (data: { paymentMethod: string; transactionId: string; amount: number }): Promise<{ success: boolean; message: string }> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/payments/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user: 1,
-        payment_method: data.paymentMethod,
-        transaction_id: data.transactionId,
-        amount: data.amount,
-        status: 'PENDING'
-      })
-    });
-    if (res.ok) return { success: true, message: "Payment proof submitted! Pending Admin verification." };
-  } catch (err) {}
-  return { success: true, message: "Payment proof submitted! Pending Admin verification." };
-};
-
-export const createGameAPI = async (newGame: Partial<Game>): Promise<Game | null> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newGame)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return normalizeGame(data);
-    }
-  } catch (err) {
-    console.warn("Backend API game creation error:", err);
-  }
-  return null;
-};
-
-export const updateGameAPI = async (gameId: number, updatedGame: Partial<Game>): Promise<Game | null> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/games/${gameId}/`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...updatedGame,
-        status: 'PENDING_APPROVAL',
-        rejection_reason: ''
-      })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return normalizeGame(data);
-    }
-  } catch (err) {
-    console.warn("Backend API game update error:", err);
-  }
-  return null;
 };
 
 export const incrementGameViewsAPI = async (gameId: number): Promise<number> => {
-  let serverCount = 0;
   try {
     const res = await fetch(`${API_BASE_URL}/games/${gameId}/increment_views/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: getAuthHeaders()
     });
     if (res.ok) {
       const data = await res.json();
-      serverCount = data.views_count;
+      return data.views_count || 100;
     }
-  } catch (err) {}
-
-  try {
-    const key = `allin_game_views_${gameId}`;
-    const saved = localStorage.getItem(key);
-    const localVal = saved ? parseInt(saved) : 0;
-    const finalVal = serverCount > 0 ? serverCount : (localVal + 1);
-    localStorage.setItem(key, finalVal.toString());
-    return finalVal;
-  } catch (e) {
-    return serverCount || 1;
-  }
+  } catch (e) {}
+  return 100;
 };
+
+export const fetchWinnersHistory = async (): Promise<WinnerRecord[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/winners/`);
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return [];
+};
+
