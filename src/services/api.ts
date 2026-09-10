@@ -513,13 +513,14 @@ export const fetchUserHistoryAPI = async (): Promise<HistoryRecord[]> => {
       const records: HistoryRecord[] = [];
 
       (data.transactions || []).forEach((t: any) => {
+        const isRejected = t.status === 'REJECTED' || t.status === 'CANCELLED';
         records.push({
           id: `TX-${t.id}`,
           date: t.created_at,
           type: t.transaction_type,
           title: t.note || `${t.transaction_type} Ledger Entry`,
-          amount: Math.abs(parseFloat(t.amount)),
-          direction: t.direction || (t.amount >= 0 ? 'CREDIT' : 'DEBIT'),
+          amount: isRejected ? 0 : Math.abs(parseFloat(t.amount)),
+          direction: isRejected ? 'CREDIT' : (t.direction || (t.amount >= 0 ? 'CREDIT' : 'DEBIT')),
           status: t.status || 'COMPLETED',
           referenceId: t.reference_id || `#${t.id}`,
           details: `Ledger Record: ${t.note}`
@@ -530,6 +531,33 @@ export const fetchUserHistoryAPI = async (): Promise<HistoryRecord[]> => {
     }
   } catch (e) {}
   return [];
+};
+
+export const submitPaymentDepositAPI = async (data: { paymentMethod: string; bank: string; transactionId: string; amount: number }): Promise<{ success: boolean; verified?: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        payment_method: data.paymentMethod,
+        bank: data.bank,
+        transaction_id: data.transactionId,
+        amount: data.amount
+      })
+    });
+    const resData = await res.json();
+    if (res.ok && resData.success && resData.verified) {
+      window.dispatchEvent(new Event('allin_wallet_updated'));
+      return { success: true, verified: true, message: resData.message || "Verification successful! Your wallet balance has been updated." };
+    }
+    return {
+      success: false,
+      verified: false,
+      message: resData.message || resData.error || "Invalid transaction ID for the selected bank. Please double-check your receipt."
+    };
+  } catch (err) {
+    return { success: false, verified: false, message: "Network error processing payment verification." };
+  }
 };
 
 export const submitPaymentProof = async (formData: FormData): Promise<{ success: boolean; message: string }> => {
@@ -576,9 +604,10 @@ export const submitWithdrawalRequestAPI = async (data: { withdrawalMethod: strin
 
 // --- ADMIN MANAGEMENT APIS ---
 
-export const fetchAdminDepositsAPI = async (statusFilter: string = 'PENDING'): Promise<PaymentSubmission[]> => {
+export const fetchAdminDepositsAPI = async (statusFilter: string = 'ALL'): Promise<PaymentSubmission[]> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/payments/?status=${statusFilter}`, {
+    const query = statusFilter && statusFilter !== 'ALL' ? `?status=${statusFilter}` : '';
+    const res = await fetch(`${API_BASE_URL}/payments/${query}`, {
       headers: getAuthHeaders()
     });
     if (res.ok) {
@@ -588,13 +617,35 @@ export const fetchAdminDepositsAPI = async (statusFilter: string = 'PENDING'): P
         id: p.id,
         userId: p.user,
         username: p.username || 'User',
+        userEmail: p.user_email,
+        userPhone: p.user_phone,
+        walletBalance: p.wallet_balance ? parseFloat(p.wallet_balance) : 0,
+        bank: p.bank || 'cbe',
         paymentMethod: p.payment_method,
         transactionId: p.transaction_id,
         amount: parseFloat(p.amount),
         proofImageUrl: p.proof_image ? (p.proof_image.startsWith('http') ? p.proof_image : `http://localhost:8000${p.proof_image}`) : undefined,
         status: p.status,
         adminNote: p.admin_note,
-        submittedAt: p.submitted_at
+        submittedAt: p.submitted_at,
+        verificationLogs: (p.verification_logs || []).map((vl: any) => ({
+          id: vl.id,
+          userId: vl.user,
+          username: vl.username,
+          bank: vl.bank,
+          referenceId: vl.reference_id,
+          requestedAmount: parseFloat(vl.requested_amount),
+          verifiedAmount: vl.verified_amount ? parseFloat(vl.verified_amount) : undefined,
+          currency: vl.currency || 'ETB',
+          referenceVerified: vl.reference_verified,
+          amountVerified: vl.amount_verified,
+          receiverVerified: vl.receiver_verified,
+          isVerified: vl.is_verified,
+          status: vl.status,
+          errorMessage: vl.error_message,
+          receiptData: vl.receipt_data,
+          createdAt: vl.created_at
+        }))
       }));
     }
   } catch (e) {}
@@ -634,6 +685,39 @@ export const rejectAdminDepositAPI = async (id: number, adminNote: string = 'Rej
     return { success: false, message: data.error || 'Failed to reject deposit.' };
   } catch (e) {
     return { success: false, message: 'Network error rejecting deposit.' };
+  }
+};
+
+export const deleteAdminDepositLogAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/${id}/delete_log/`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, message: data.message || 'Deposit log deleted successfully.' };
+    }
+    return { success: false, message: data.error || 'Failed to delete deposit log.' };
+  } catch (e) {
+    return { success: false, message: 'Network error deleting deposit log.' };
+  }
+};
+
+export const bulkDeleteAdminDepositLogsAPI = async (ids?: number[], status?: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/bulk_delete/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids, status })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, message: data.message || 'Deposit logs deleted successfully.' };
+    }
+    return { success: false, message: data.error || 'Failed to bulk delete deposit logs.' };
+  } catch (e) {
+    return { success: false, message: 'Network error bulk deleting deposit logs.' };
   }
 };
 

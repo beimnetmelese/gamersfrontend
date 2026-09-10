@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, ShieldAlert, Image as ImageIcon, Users, Store } from 'lucide-react';
+import { X, Check, ShieldAlert, Users, Store } from 'lucide-react';
 import type { Game, PaymentSubmission, WithdrawalRequest, UserAdminRecord } from '../types';
 import { IconShield } from '../components/Icons';
 import {
   fetchAdminDepositsAPI, approveAdminDepositAPI, rejectAdminDepositAPI,
   fetchAdminWithdrawalsAPI, approveAdminWithdrawalAPI, rejectAdminWithdrawalAPI,
   fetchAdminUsersAPI, toggleAdminUserStatusAPI, changeAdminUserRoleAPI,
-  fetchPendingSellersAPI, approveAdminSellerAPI, rejectAdminSellerAPI
+  fetchPendingSellersAPI, approveAdminSellerAPI, rejectAdminSellerAPI,
+  deleteAdminDepositLogAPI, bulkDeleteAdminDepositLogsAPI
 } from '../services/api';
 
 interface AdminDashboardProps {
@@ -34,8 +35,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const [users, setUsers] = useState<UserAdminRecord[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
 
-  const [paymentFilter, setPaymentFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [withdrawalFilter, setWithdrawalFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [inspectingDeposit, setInspectingDeposit] = useState<PaymentSubmission | null>(null);
 
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -69,10 +71,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const handleApproveDeposit = async (id: number) => {
     setStatusMsg('');
     setErrorMsg('');
-    const res = await approveAdminDepositAPI(id, 'Approved via Web Admin');
+    const res = await approveAdminDepositAPI(id, 'Approved via Web Admin Override');
     if (res.success) {
       setStatusMsg(res.message);
-      fetchAdminDepositsAPI(paymentFilter).then(list => setPayments(list));
+      const updatedList = await fetchAdminDepositsAPI(paymentFilter);
+      setPayments(updatedList);
+      if (inspectingDeposit?.id === id) {
+        setInspectingDeposit(updatedList.find(p => p.id === id) || null);
+      }
     } else {
       setErrorMsg(res.message);
     }
@@ -86,6 +92,39 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     const res = await rejectAdminDepositAPI(id, note);
     if (res.success) {
       setStatusMsg(res.message);
+      const updatedList = await fetchAdminDepositsAPI(paymentFilter);
+      setPayments(updatedList);
+      if (inspectingDeposit?.id === id) {
+        setInspectingDeposit(updatedList.find(p => p.id === id) || null);
+      }
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleDeleteDepositLog = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this payment verification log?")) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await deleteAdminDepositLogAPI(id);
+    if (res.success) {
+      setStatusMsg(res.message);
+      if (inspectingDeposit?.id === id) setInspectingDeposit(null);
+      fetchAdminDepositsAPI(paymentFilter).then(list => setPayments(list));
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleBulkDeleteLogs = async () => {
+    if (!window.confirm(`Are you sure you want to delete deposit logs filtered by '${paymentFilter}'?`)) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const filterVal = paymentFilter === 'ALL' ? undefined : paymentFilter;
+    const res = await bulkDeleteAdminDepositLogsAPI(undefined, filterVal);
+    if (res.success) {
+      setStatusMsg(res.message);
+      setInspectingDeposit(null);
       fetchAdminDepositsAPI(paymentFilter).then(list => setPayments(list));
     } else {
       setErrorMsg(res.message);
@@ -393,92 +432,148 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Tab 2: Direct Web Deposits */}
+      {/* Tab 2: Payment Verification Audit Dashboard */}
       {activeTab === 'payments' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-extrabold text-lg text-slate-100">User Direct Web Payment Submissions</h3>
-            <div className="flex gap-1 text-[11px]">
-              {(['PENDING', 'APPROVED', 'REJECTED'] as const).map(st => (
+        <div className="space-y-5">
+          {/* Header & Quick-Filter Bar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-extrabold text-xl text-slate-100 flex items-center gap-2">
+                💳 Payment Verification Audit & Overrides
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">Real-time Automated Receipt Audit Logs, Manual Overrides & Maintenance</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
+                {[
+                  { label: 'All', val: 'ALL' },
+                  { label: 'Succeeded (Approved)', val: 'APPROVED' },
+                  { label: 'Failed (Rejected)', val: 'REJECTED' },
+                  { label: 'Pending', val: 'PENDING' }
+                ].map(tab => (
+                  <button
+                    key={tab.val}
+                    onClick={() => {
+                      setPaymentFilter(tab.val);
+                      fetchAdminDepositsAPI(tab.val).then(list => setPayments(list));
+                    }}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                      paymentFilter === tab.val
+                        ? 'bg-purple-600 text-white font-extrabold shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {payments.length > 0 && (
                 <button
-                  key={st}
-                  onClick={() => setPaymentFilter(st)}
-                  className={`px-3 py-1 rounded-lg font-bold uppercase transition-all ${
-                    paymentFilter === st ? 'bg-purple-600 text-white font-extrabold' : 'bg-slate-900 text-slate-400'
-                  }`}
+                  onClick={handleBulkDeleteLogs}
+                  className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-600/40 text-rose-300 font-bold rounded-xl text-xs flex items-center gap-1 transition-all"
                 >
-                  {st}
+                  <X className="w-3.5 h-3.5" /> Clear Filtered Logs
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
+          {/* Verification Request Table */}
           <div className="glass-panel overflow-hidden border border-slate-800 rounded-2xl">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900/90 text-slate-400 uppercase font-mono border-b border-slate-800">
                 <tr>
-                  <th className="p-3">User</th>
-                  <th className="p-3">Method</th>
-                  <th className="p-3">Transaction ID</th>
+                  <th className="p-3">User Profile</th>
+                  <th className="p-3">Bank / Gateway</th>
+                  <th className="p-3">Reference ID</th>
                   <th className="p-3">Amount</th>
-                  <th className="p-3">Proof Image</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Verification Action</th>
+                  <th className="p-3">Verification Status</th>
+                  <th className="p-3">Submitted At</th>
+                  <th className="p-3 text-right">Audit & Overrides</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {payments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-500 font-sans">
-                      No deposits found under '{paymentFilter}' status.
+                    <td colSpan={7} className="p-8 text-center text-slate-500 font-sans">
+                      No deposit verification requests found under status '{paymentFilter}'.
                     </td>
                   </tr>
                 ) : (
-                  payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-900/40">
-                      <td className="p-3 font-sans font-bold text-slate-100">{p.username}</td>
-                      <td className="p-3 text-cyan-400">{p.paymentMethod}</td>
-                      <td className="p-3 text-purple-300 font-bold">{p.transactionId}</td>
-                      <td className="p-3 font-bold text-emerald-400">{p.amount} ETB</td>
-                      <td className="p-3">
-                        {p.proofImageUrl ? (
+                  payments.map((p) => {
+                    const isSucceeded = p.status === 'APPROVED';
+                    const isFailed = p.status === 'REJECTED';
+                    const isPending = p.status === 'PENDING';
+
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-900/40 transition-colors">
+                        <td className="p-3 font-sans">
+                          <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                            {p.username}
+                            <span className="text-[10px] text-slate-500 font-mono">(ID: #{p.userId})</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">{p.userPhone || p.userEmail || 'No contact'}</div>
+                        </td>
+                        <td className="p-3 font-sans">
+                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                            p.bank === 'telebirr' ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/30' : 'bg-purple-950 text-purple-300 border border-purple-500/30'
+                          }`}>
+                            {(p.bank || 'cbe').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-purple-300 font-mono">{p.transactionId}</td>
+                        <td className="p-3 font-bold text-emerald-400 font-mono">{p.amount} ETB</td>
+                        <td className="p-3 font-sans">
+                          <span className={`badge-pill ${
+                            isSucceeded ? 'badge-emerald' : isFailed ? 'badge-rose' : 'badge-amber'
+                          }`}>
+                            {isSucceeded ? '✓ SUCCEEDED' : isFailed ? '✕ FAILED' : '⏳ PENDING'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-400 font-mono text-[11px]">
+                          {new Date(p.submittedAt).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => setPreviewProofUrl(p.proofImageUrl || null)}
-                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-lg flex items-center gap-1 font-sans text-[11px]"
+                            onClick={() => setInspectingDeposit(p)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold rounded-lg text-[11px] flex items-center gap-1 border border-slate-700"
                           >
-                            <ImageIcon className="w-3.5 h-3.5" /> View Proof
+                            🔍 Inspect Log
                           </button>
-                        ) : (
-                          <span className="text-slate-500 font-sans">No image</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span className={`badge-pill ${p.status === 'APPROVED' ? 'badge-emerald' : p.status === 'REJECTED' ? 'badge-rose' : 'badge-amber'}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right flex items-center justify-end gap-2">
-                        {p.status === 'PENDING' ? (
-                          <>
+
+                          {isFailed || isPending ? (
                             <button
                               onClick={() => handleApproveDeposit(p.id)}
-                              className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-lg text-xs"
+                              className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-lg text-[11px]"
+                              title="Manually approve and credit wallet"
                             >
-                              ✓ Approve & Credit
+                              ✓ Approve
                             </button>
+                          ) : null}
+
+                          {isSucceeded || isPending ? (
                             <button
                               onClick={() => handleRejectDeposit(p.id)}
-                              className="px-3 py-1 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-bold rounded-lg text-xs"
+                              className="px-2.5 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-bold rounded-lg text-[11px]"
+                              title="Manually reject deposit"
                             >
                               ✕ Reject
                             </button>
-                          </>
-                        ) : (
-                          <span className="text-slate-400 font-sans font-semibold">Processed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                          ) : null}
+
+                          <button
+                            onClick={() => handleDeleteDepositLog(p.id)}
+                            className="px-2 py-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg text-[11px]"
+                            title="Delete log entry"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -776,6 +871,142 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                 >
                   Confirm Rejection
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Detailed Verification Inspector Modal */}
+      <AnimatePresence>
+        {inspectingDeposit && (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setInspectingDeposit(null); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative max-w-3xl w-full bg-slate-900 border border-purple-500/40 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
+            >
+              <button
+                onClick={() => setInspectingDeposit(null)}
+                className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Header */}
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+                <div className="p-3 bg-purple-950 border border-purple-500/40 rounded-2xl">
+                  <IconShield className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white flex items-center gap-2">
+                    Payment Verification Inspector
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                      inspectingDeposit.status === 'APPROVED' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' :
+                      inspectingDeposit.status === 'REJECTED' ? 'bg-rose-950 text-rose-300 border border-rose-500/40' :
+                      'bg-amber-950 text-amber-300 border border-amber-500/40'
+                    }`}>
+                      {inspectingDeposit.status}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-purple-400 font-mono">Reference: {inspectingDeposit.transactionId} • Deposit ID #{inspectingDeposit.id}</p>
+                </div>
+              </div>
+
+              {/* User Profile Card */}
+              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">User Profile</span>
+                  <div className="font-bold text-slate-100 text-sm">{inspectingDeposit.username}</div>
+                  <div className="text-slate-400">User ID: #{inspectingDeposit.userId}</div>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Contact Details</span>
+                  <div className="text-slate-200">{inspectingDeposit.userPhone || 'No Phone Registered'}</div>
+                  <div className="text-slate-400">{inspectingDeposit.userEmail || 'No Email'}</div>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Current Wallet Balance</span>
+                  <div className="font-black text-emerald-400 text-base">{(inspectingDeposit.walletBalance || 0).toLocaleString()} ETB</div>
+                </div>
+              </div>
+
+              {/* Verification Breakdown Grid */}
+              {inspectingDeposit.verificationLogs && inspectingDeposit.verificationLogs.length > 0 ? (
+                (() => {
+                  const latestLog = inspectingDeposit.verificationLogs[0];
+                  return (
+                    <div className="space-y-4">
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-purple-300">Automated Scraper Flags & Verification Matrix:</h4>
+                      
+                      <div className="grid grid-cols-3 gap-3 text-xs">
+                        <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center space-y-1 ${
+                          latestLog.referenceVerified ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                        }`}>
+                          <span className="text-[10px] font-mono uppercase text-slate-400">1. Reference Exists</span>
+                          <span className="font-extrabold text-sm">{latestLog.referenceVerified ? '✓ Valid Reference' : '✕ Not Found'}</span>
+                        </div>
+
+                        <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center space-y-1 ${
+                          latestLog.amountVerified ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                        }`}>
+                          <span className="text-[10px] font-mono uppercase text-slate-400">2. Amount Match</span>
+                          <span className="font-extrabold text-sm">{latestLog.amountVerified ? '✓ Exact Match' : '✕ Amount Mismatch'}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Req: {latestLog.requestedAmount} | Scraped: {latestLog.verifiedAmount || 'N/A'}</span>
+                        </div>
+
+                        <div className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center space-y-1 ${
+                          latestLog.receiverVerified ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                        }`}>
+                          <span className="text-[10px] font-mono uppercase text-slate-400">3. Receiver Match</span>
+                          <span className="font-extrabold text-sm">{latestLog.receiverVerified ? '✓ Receiver Match' : '✕ Name Mismatch'}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Target: Beimnet Melese</span>
+                        </div>
+                      </div>
+
+                      {/* Raw Receipt Scraper Logs JSON */}
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-300 block">Raw Receipt Scraper Log JSON:</span>
+                        <pre className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-[11px] font-mono text-cyan-300 max-h-48 overflow-auto leading-tight">
+                          {JSON.stringify(latestLog.receiptData || latestLog, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-slate-400 text-center">
+                  No automated scraper log recorded for this deposit request yet.
+                </div>
+              )}
+
+              {/* Manual Override Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+                <button
+                  onClick={() => handleDeleteDepositLog(inspectingDeposit.id)}
+                  className="px-4 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-600/40 text-rose-300 font-bold rounded-xl text-xs"
+                >
+                  🗑️ Delete Log Entry
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRejectDeposit(inspectingDeposit.id)}
+                    className="px-4 py-2 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-bold rounded-xl text-xs"
+                  >
+                    ✕ Manual Reject Override
+                  </button>
+                  <button
+                    onClick={() => handleApproveDeposit(inspectingDeposit.id)}
+                    className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-xl text-xs shadow-lg"
+                  >
+                    ✓ Manual Approve Override
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

@@ -54,14 +54,6 @@ export function App() {
   useEffect(() => {
     loadInitialData();
 
-    // Real-time polling timer for wallet balance & session state sync (every 4s)
-    const interval = setInterval(() => {
-      const token = localStorage.getItem('allin_auth_token');
-      if (token) {
-        fetchWallet().then(w => setWallet(w));
-      }
-    }, 4000);
-
     const handleWalletUpdate = () => {
       const token = localStorage.getItem('allin_auth_token');
       if (token) {
@@ -71,7 +63,6 @@ export function App() {
     window.addEventListener('allin_wallet_updated', handleWalletUpdate);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('allin_wallet_updated', handleWalletUpdate);
     };
   }, []);

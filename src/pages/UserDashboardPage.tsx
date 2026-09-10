@@ -518,26 +518,39 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
                   <th className="p-3">Type</th>
                   <th className="p-3">Reference</th>
                   <th className="p-3">Date</th>
+                  <th className="p-3">Status</th>
                   <th className="p-3 text-right">Impact</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {historyLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-sans">No activity history logs recorded yet.</td>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-sans">No activity history logs recorded yet.</td>
                   </tr>
                 ) : (
-                  historyLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-900/40">
-                      <td className="p-3 font-sans font-bold text-slate-200">{log.title}</td>
-                      <td className="p-3 text-cyan-400">{log.type}</td>
-                      <td className="p-3 text-slate-400">{log.referenceId}</td>
-                      <td className="p-3 text-slate-500">{new Date(log.date).toLocaleDateString()}</td>
-                      <td className={`p-3 text-right font-bold ${log.direction === 'CREDIT' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {log.direction === 'CREDIT' ? `+${log.amount}` : `-${log.amount}`} ETB
-                      </td>
-                    </tr>
-                  ))
+                  historyLogs.map((log) => {
+                    const isRejected = log.status === 'REJECTED' || log.status === 'CANCELLED';
+                    return (
+                      <tr key={log.id} className="hover:bg-slate-900/40">
+                        <td className="p-3 font-sans font-bold text-slate-200">{log.title}</td>
+                        <td className="p-3 text-cyan-400">{log.type}</td>
+                        <td className="p-3 text-slate-400">{log.referenceId}</td>
+                        <td className="p-3 text-slate-500">{new Date(log.date).toLocaleDateString()}</td>
+                        <td className="p-3 font-sans">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            log.status === 'COMPLETED' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
+                            isRejected ? 'bg-rose-950 text-rose-300 border border-rose-500/30' :
+                            'bg-amber-950 text-amber-300 border border-amber-500/30'
+                          }`}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className={`p-3 text-right font-bold ${isRejected ? 'text-slate-400' : log.direction === 'CREDIT' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isRejected ? '0.00 ETB' : (log.direction === 'CREDIT' ? `+${log.amount} ETB` : `-${log.amount} ETB`)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

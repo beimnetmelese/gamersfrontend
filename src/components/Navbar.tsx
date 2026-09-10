@@ -50,10 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     if (currentUser) {
       loadNotifications();
-      const timer = setInterval(() => {
-        loadNotifications();
-      }, 6000); // Real-time notification polling every 6 seconds
-      return () => clearInterval(timer);
     }
   }, [currentUser]);
 

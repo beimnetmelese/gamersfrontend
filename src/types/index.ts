@@ -207,10 +207,33 @@ export interface Wallet {
   transactions: WalletTransaction[];
 }
 
+export interface PaymentVerificationLog {
+  id: number;
+  userId?: number;
+  username?: string;
+  bank: 'cbe' | 'telebirr' | string;
+  referenceId: string;
+  requestedAmount: number;
+  verifiedAmount?: number;
+  currency: string;
+  referenceVerified: boolean;
+  amountVerified: boolean;
+  receiverVerified: boolean;
+  isVerified: boolean;
+  status: string;
+  errorMessage?: string;
+  receiptData?: any;
+  createdAt: string;
+}
+
 export interface PaymentSubmission {
   id: number;
   userId: number;
   username: string;
+  userEmail?: string;
+  userPhone?: string;
+  walletBalance?: number;
+  bank?: string;
   paymentMethod: string;
   transactionId: string;
   amount: number;
@@ -218,6 +241,7 @@ export interface PaymentSubmission {
   status: PaymentStatus;
   adminNote?: string;
   submittedAt: string;
+  verificationLogs?: PaymentVerificationLog[];
 }
 
 export interface WithdrawalRequest {
