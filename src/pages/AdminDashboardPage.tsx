@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, ShieldAlert, Users, Store } from 'lucide-react';
-import type { Game, PaymentSubmission, WithdrawalRequest, UserAdminRecord } from '../types';
+import {
+  X, Check, ShieldAlert, Users, Store, Package, Flag, Settings,
+  BarChart3, ShieldCheck
+} from 'lucide-react';
+import type {
+  Game, PaymentSubmission, WithdrawalRequest, UserAdminRecord,
+  Product, Report, AdminPlatformAnalytics
+} from '../types';
 import { IconShield } from '../components/Icons';
 import {
   fetchAdminDepositsAPI, approveAdminDepositAPI, rejectAdminDepositAPI,
   fetchAdminWithdrawalsAPI, approveAdminWithdrawalAPI, rejectAdminWithdrawalAPI,
   fetchAdminUsersAPI, toggleAdminUserStatusAPI, changeAdminUserRoleAPI,
   fetchPendingSellersAPI, approveAdminSellerAPI, rejectAdminSellerAPI,
-  deleteAdminDepositLogAPI, bulkDeleteAdminDepositLogsAPI
+  deleteAdminDepositLogAPI, bulkDeleteAdminDepositLogsAPI,
+  fetchProductsAPI, approveProductAPI, rejectProductAPI,
+  fetchAdminReportsAPI, resolveReportAPI,
+  fetchPlatformSettingsAPI, updatePlatformSettingsAPI,
+  banUserAPI, unbanUserAPI, fetchAdminPlatformAnalyticsAPI
 } from '../services/api';
 
 interface AdminDashboardProps {
@@ -24,7 +34,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   onRejectGame,
   onResolveGame,
 }) => {
-  const [activeTab, setActiveTab] = useState<'games' | 'payments' | 'withdrawals' | 'users' | 'sellers'>('games');
+  const [activeTab, setActiveTab] = useState<'games' | 'payments' | 'withdrawals' | 'users' | 'sellers' | 'products' | 'moderation' | 'settings' | 'analytics'>('games');
   const [rejectingGame, setRejectingGame] = useState<Game | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
   const [previewProofUrl, setPreviewProofUrl] = useState<string | null>(null);
@@ -34,6 +44,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [users, setUsers] = useState<UserAdminRecord[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
+
+  // Developer 3 Data States
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productFilter, setProductFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportFilter, setReportFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED' | 'DISMISSED'>('PENDING');
+  const [settingValues, setSettingValues] = useState<Record<string, string>>({});
+  const [platformAnalytics, setPlatformAnalytics] = useState<AdminPlatformAnalytics | null>(null);
 
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [withdrawalFilter, setWithdrawalFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
@@ -58,6 +76,101 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
 
     const selList = await fetchPendingSellersAPI();
     setSellers(selList);
+
+    fetchProductsAPI().then(prods => setProducts(prods));
+    fetchAdminReportsAPI().then(reps => setReports(reps));
+    fetchPlatformSettingsAPI().then(st => {
+      const map: Record<string, string> = {};
+      st.forEach(item => { map[item.key] = item.value; });
+      setSettingValues(map);
+    });
+    fetchAdminPlatformAnalyticsAPI().then(an => setPlatformAnalytics(an));
+  };
+
+  const handleApproveProduct = async (id: number) => {
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await approveProductAPI(id);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchProductsAPI().then(prods => setProducts(prods));
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleRejectProduct = async (id: number) => {
+    const reason = window.prompt("Reason for rejecting product:", "Product does not meet platform quality criteria");
+    if (!reason) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await rejectProductAPI(id, reason);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchProductsAPI().then(prods => setProducts(prods));
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleResolveReport = async (id: number, actionTaken: string = 'NO_ACTION') => {
+    const note = window.prompt("Resolution note:", actionTaken === 'BAN_USER' ? "Target user banned by moderation team" : "Ticket verified and closed");
+    if (!note) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await resolveReportAPI(id, note, 'RESOLVED', actionTaken);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchAdminReportsAPI().then(reps => setReports(reps));
+      fetchAdminUsersAPI().then(usrList => setUsers(usrList));
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatusMsg('');
+    setErrorMsg('');
+    const list = Object.entries(settingValues).map(([key, value]) => ({ key, value }));
+    const res = await updatePlatformSettingsAPI(list);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchPlatformSettingsAPI().then(st => {
+        const map: Record<string, string> = {};
+        st.forEach(item => { map[item.key] = item.value; });
+        setSettingValues(map);
+      });
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleBanUser = async (userId: number, username: string) => {
+    const reason = window.prompt(`Enter ban reason for @${username}:`, "Violation of platform terms and competition rules");
+    if (!reason) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await banUserAPI(userId, reason);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchAdminUsersAPI().then(usrList => setUsers(usrList));
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
+  const handleUnbanUser = async (userId: number, username: string) => {
+    if (!window.confirm(`Lift ban on user @${username}?`)) return;
+    setStatusMsg('');
+    setErrorMsg('');
+    const res = await unbanUserAPI(userId);
+    if (res.success) {
+      setStatusMsg(res.message);
+      fetchAdminUsersAPI().then(usrList => setUsers(usrList));
+    } else {
+      setErrorMsg(res.message);
+    }
   };
 
   useEffect(() => {
@@ -261,17 +374,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
         <button
           onClick={() => setActiveTab('games')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'games'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
               : 'bg-slate-900 text-slate-400 hover:text-slate-200'
           }`}
         >
-          Game & Product Approvals
+          Game Approvals
+        </button>
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'products'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
+              : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Products Queue ({products.filter(p => p.approvalStatus === 'PENDING').length})
         </button>
         <button
           onClick={() => setActiveTab('payments')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'payments'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
               : 'bg-slate-900 text-slate-400 hover:text-slate-200'
@@ -281,17 +404,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('withdrawals')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'withdrawals'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
               : 'bg-slate-900 text-slate-400 hover:text-slate-200'
           }`}
         >
-          Withdrawal Requests ({withdrawals.filter(w => w.status === 'PENDING').length})
+          Withdrawals ({withdrawals.filter(w => w.status === 'PENDING').length})
         </button>
         <button
           onClick={() => setActiveTab('sellers')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'sellers'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
               : 'bg-slate-900 text-slate-400 hover:text-slate-200'
@@ -301,13 +424,43 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'users'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
               : 'bg-slate-900 text-slate-400 hover:text-slate-200'
           }`}
         >
           User Accounts ({users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('moderation')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'moderation'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
+              : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Moderation & Reports ({reports.filter(r => r.status === 'PENDING').length})
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'settings'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
+              : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Platform Settings
+        </button>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'analytics'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold'
+              : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Platform Analytics
         </button>
       </div>
 
@@ -693,10 +846,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                 ) : (
                   sellers.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-900/40">
-                      <td className="p-3 font-sans font-bold text-slate-100">{s.username}</td>
-                      <td className="p-3 text-purple-300 font-bold">{s.business_name}</td>
-                      <td className="p-3 text-slate-300">{s.phone_number}</td>
-                      <td className="p-3 text-slate-400">{s.address}</td>
+                      <td className="p-3 font-sans font-bold text-slate-100">{s.username || (s.user ? `User #${s.user}` : 'Applicant')}</td>
+                      <td className="p-3 text-purple-300 font-bold">{s.business_name || s.businessName || 'Store'}</td>
+                      <td className="p-3 text-slate-300">{s.phone_number || s.phoneNumber || 'N/A'}</td>
+                      <td className="p-3 text-slate-400">{s.address || 'N/A'}</td>
                       <td className="p-3 text-slate-300 font-sans">{s.description || 'N/A'}</td>
                       <td className="p-3 text-right flex items-center justify-end gap-2">
                         <button
@@ -762,24 +915,491 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                       }`}>
                         {u.accountStatus}
                       </span>
+                      {u.banReason && (
+                        <div className="text-[10px] text-rose-400 font-sans mt-1 max-w-[150px] truncate" title={u.banReason}>
+                          Ban: {u.banReason}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 text-slate-500">{new Date(u.dateJoined).toLocaleDateString()}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right space-x-2">
                       <button
                         onClick={() => handleToggleUserStatus(u.id, u.accountStatus)}
-                        className={`px-3 py-1 rounded text-[11px] font-bold ${
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold ${
                           u.accountStatus === 'ACTIVE'
-                            ? 'bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-600/40'
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600/40'
                             : 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/40'
                         }`}
                       >
-                        {u.accountStatus === 'ACTIVE' ? 'Suspend Account' : 'Reactivate Account'}
+                        {u.accountStatus === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
                       </button>
+                      {u.accountStatus === 'ACTIVE' ? (
+                        <button
+                          onClick={() => handleBanUser(u.id, u.username)}
+                          className="px-2.5 py-1 rounded text-[11px] font-bold bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-600/40"
+                        >
+                          Ban
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUnbanUser(u.id, u.username)}
+                          className="px-2.5 py-1 rounded text-[11px] font-bold bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-600/40"
+                        >
+                          Unban
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* 6. PRODUCTS APPROVAL QUEUE */}
+      {activeTab === 'products' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Package className="w-5 h-5 text-cyan-400" />
+                Product Verification & Approval Queue
+              </h3>
+              <p className="text-xs text-slate-400">
+                Review seller-submitted products before they are published to live competitions.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setProductFilter(f)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    productFilter === f
+                      ? 'bg-cyan-500 text-slate-950 font-extrabold shadow-md shadow-cyan-500/20'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass-card overflow-x-auto border border-slate-800/80 rounded-2xl">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/80 text-slate-400 uppercase font-mono border-b border-slate-800">
+                <tr>
+                  <th className="p-3">Product</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Condition</th>
+                  <th className="p-3">Retail Price</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {products
+                  .filter(p => productFilter === 'ALL' || p.approvalStatus === productFilter)
+                  .map(p => (
+                    <tr key={p.id} className="hover:bg-slate-900/40">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={p.imageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=120&auto=format&fit=crop'}
+                            alt={p.title}
+                            className="w-10 h-10 object-cover rounded-lg border border-slate-700 bg-slate-950"
+                          />
+                          <div>
+                            <div className="font-sans font-bold text-slate-100">{p.title}</div>
+                            <div className="text-[10px] text-slate-400 line-clamp-1 max-w-xs">{p.description}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-300">{p.category}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                          {p.condition}
+                        </span>
+                      </td>
+                      <td className="p-3 text-cyan-300 font-bold">ETB {p.estimatedValue?.toLocaleString()}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          p.approvalStatus === 'APPROVED' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/40' :
+                          p.approvalStatus === 'REJECTED' ? 'bg-rose-950 text-rose-300 border border-rose-700/40' :
+                          'bg-amber-950 text-amber-300 border border-amber-700/40'
+                        }`}>
+                          {p.approvalStatus}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        {p.approvalStatus === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveProduct(p.id)}
+                              className="px-3 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/40 rounded text-[11px] font-bold"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectProduct(p.id)}
+                              className="px-3 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-600/40 rounded text-[11px] font-bold"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {p.approvalStatus === 'APPROVED' && (
+                          <button
+                            onClick={() => handleRejectProduct(p.id)}
+                            className="px-3 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-600/30 rounded text-[11px] font-bold"
+                          >
+                            Revoke
+                          </button>
+                        )}
+                        {p.approvalStatus === 'REJECTED' && (
+                          <button
+                            onClick={() => handleApproveProduct(p.id)}
+                            className="px-3 py-1 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/30 rounded text-[11px] font-bold"
+                          >
+                            Re-Approve
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {products.filter(p => productFilter === 'ALL' || p.approvalStatus === productFilter).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-slate-500 font-sans">
+                      No products found under filter: {productFilter}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODERATION & USER REPORTS */}
+      {activeTab === 'moderation' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+            <div>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Flag className="w-5 h-5 text-amber-400" />
+                Moderation Tickets & Reports
+              </h3>
+              <p className="text-xs text-slate-400">
+                Investigate user complaints regarding scam, fraud, inaccurate descriptions, or non-delivery.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {(['ALL', 'PENDING', 'RESOLVED', 'DISMISSED'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setReportFilter(f)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    reportFilter === f
+                      ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md shadow-amber-500/20'
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass-card overflow-x-auto border border-slate-800/80 rounded-2xl">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/80 text-slate-400 uppercase font-mono border-b border-slate-800">
+                <tr>
+                  <th className="p-3">Target</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Reason / Details</th>
+                  <th className="p-3">Reporter</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {reports
+                  .filter(r => reportFilter === 'ALL' || r.status === reportFilter)
+                  .map(r => (
+                    <tr key={r.id} className="hover:bg-slate-900/40">
+                      <td className="p-3">
+                        <span className="font-bold text-slate-200">[{r.targetType}] #{r.targetId}</span>
+                        {r.targetLabel && <div className="text-[10px] text-slate-400">{r.targetLabel}</div>}
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/40">
+                          {r.category}
+                        </span>
+                      </td>
+                      <td className="p-3 font-sans max-w-sm text-slate-300">
+                        <div className="line-clamp-2">{r.reason}</div>
+                        {r.resolutionNote && (
+                          <div className="text-[10px] text-emerald-400 mt-1">Note: {r.resolutionNote}</div>
+                        )}
+                      </td>
+                      <td className="p-3 text-slate-400">@{r.reporterUsername || 'Anonymous'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          r.status === 'RESOLVED' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/40' :
+                          r.status === 'DISMISSED' ? 'bg-slate-800 text-slate-400' :
+                          'bg-rose-950 text-rose-300 border border-rose-700/40'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        {r.status === 'PENDING' ? (
+                          <>
+                            <button
+                              onClick={() => handleResolveReport(r.id, 'NO_ACTION')}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold"
+                            >
+                              Dismiss
+                            </button>
+                            <button
+                              onClick={() => handleResolveReport(r.id, 'WARNING_ISSUED')}
+                              className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-600/40 rounded text-[11px] font-bold"
+                            >
+                              Resolve
+                            </button>
+                            {r.targetType === 'USER' && (
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'BAN_USER')}
+                                className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-600/40 rounded text-[11px] font-bold"
+                              >
+                                Ban Target
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">Resolved</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {reports.filter(r => reportFilter === 'ALL' || r.status === reportFilter).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-slate-500 font-sans">
+                      No reports found under filter: {reportFilter}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 8. PLATFORM SETTINGS */}
+      {activeTab === 'settings' && (
+        <div className="space-y-4 max-w-4xl">
+          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              <Settings className="w-5 h-5 text-purple-400" />
+              Platform Configuration & Financial Rules
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Adjust live fee cuts, payment thresholds, automated approval rules, and contact information.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveSettings} className="glass-card p-6 border border-slate-800/80 rounded-2xl space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Platform Commission (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={settingValues['platform_commission_percent'] || '10'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, platform_commission_percent: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+                <span className="text-[10px] text-slate-500">Commission retained by the platform on completed competitions.</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Auto-Approve Products
+                </label>
+                <select
+                  value={settingValues['auto_approve_products'] || 'false'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, auto_approve_products: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-mono focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="false">Require Manual Admin Approval</option>
+                  <option value="true">Automatically Approve Seller Products</option>
+                </select>
+                <span className="text-[10px] text-slate-500">Whether new inventory skips the verification queue.</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Minimum Deposit (ETB)
+                </label>
+                <input
+                  type="number"
+                  value={settingValues['minimum_deposit_etb'] || '50'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, minimum_deposit_etb: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Minimum Withdrawal (ETB)
+                </label>
+                <input
+                  type="number"
+                  value={settingValues['minimum_withdrawal_etb'] || '100'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, minimum_withdrawal_etb: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Maximum Single Withdrawal (ETB)
+                </label>
+                <input
+                  type="number"
+                  value={settingValues['maximum_withdrawal_etb'] || '50000'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, maximum_withdrawal_etb: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Support Email
+                </label>
+                <input
+                  type="email"
+                  value={settingValues['support_email'] || 'support@competition.et'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, support_email: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Support Phone
+                </label>
+                <input
+                  type="text"
+                  value={settingValues['support_phone'] || '+251 911 000 000'}
+                  onChange={e => setSettingValues(prev => ({ ...prev, support_phone: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300">
+                  Live Platform Announcement
+                </label>
+                <input
+                  type="text"
+                  value={settingValues['platform_announcement'] || ''}
+                  placeholder="System maintenance or seasonal bonuses..."
+                  onChange={e => setSettingValues(prev => ({ ...prev, platform_announcement: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-sans focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-800">
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-extrabold rounded-xl text-xs shadow-lg shadow-purple-600/30 transition-all"
+              >
+                Save Platform Settings
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 9. REAL PLATFORM ANALYTICS */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-5">
+          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-emerald-400" />
+              Live Platform Analytics & Financial Telemetry
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Database-backed aggregates computed dynamically across users, ledgers, games, and fulfillment.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="glass-card p-5 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400 font-bold">USER BASE</span>
+                <Users className="w-4 h-4 text-cyan-400" />
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-cyan-300">
+                {platformAnalytics?.users.total || users.length}
+              </div>
+              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
+                <div className="flex justify-between"><span>Active:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.users.active ?? users.filter(u => u.accountStatus === 'ACTIVE').length}</span></div>
+                <div className="flex justify-between"><span>Banned:</span><span className="text-rose-300 font-bold">{platformAnalytics?.users.banned ?? users.filter(u => u.accountStatus === 'BANNED').length}</span></div>
+                <div className="flex justify-between"><span>Verified Sellers:</span><span className="text-purple-300 font-bold">{platformAnalytics?.users.verifiedSellers ?? users.filter(u => u.role === 'SELLER').length}</span></div>
+              </div>
+            </div>
+
+            <div className="glass-card p-5 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400 font-bold">COMPETITIONS</span>
+                <Store className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-purple-300">
+                {platformAnalytics?.competitions.total || games.length}
+              </div>
+              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
+                <div className="flex justify-between"><span>Active:</span><span className="text-cyan-300 font-bold">{platformAnalytics?.competitions.active ?? games.filter(g => g.status === 'ACTIVE').length}</span></div>
+                <div className="flex justify-between"><span>Completed:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.competitions.completed ?? games.filter(g => g.status === 'COMPLETED').length}</span></div>
+                <div className="flex justify-between"><span>Total Entries:</span><span className="text-amber-300 font-bold">{platformAnalytics?.competitions.totalEntries ?? 0}</span></div>
+              </div>
+            </div>
+
+            <div className="glass-card p-5 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400 font-bold">FINANCIAL VOLUME</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-2xl font-extrabold font-mono text-emerald-400">
+                ETB {(platformAnalytics?.financials.totalDepositsEtb || 0).toLocaleString()}
+              </div>
+              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
+                <div className="flex justify-between"><span>Deposits Approved:</span><span className="text-emerald-300 font-bold">ETB {(platformAnalytics?.financials.totalDepositsEtb || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Withdrawals Settled:</span><span className="text-rose-300 font-bold">ETB {(platformAnalytics?.financials.totalWithdrawalsEtb || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Competition Flow:</span><span className="text-cyan-300 font-bold">ETB {(platformAnalytics?.financials.platformVolumeEtb || 0).toLocaleString()}</span></div>
+              </div>
+            </div>
+
+            <div className="glass-card p-5 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400 font-bold">FULFILLMENT & TRUST</span>
+                <Package className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-amber-300">
+                {platformAnalytics?.fulfillment.totalDeliveries || 0}
+              </div>
+              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
+                <div className="flex justify-between"><span>Delivered:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.fulfillment.completedDeliveries || 0}</span></div>
+                <div className="flex justify-between"><span>Pending Delivery:</span><span className="text-amber-300 font-bold">{platformAnalytics?.fulfillment.pendingDeliveries || 0}</span></div>
+                <div className="flex justify-between"><span>Pending Reports:</span><span className="text-rose-400 font-bold">{platformAnalytics?.moderation.pendingReports || reports.filter(r => r.status === 'PENDING').length}</span></div>
+              </div>
+            </div>
           </div>
         </div>
       )}

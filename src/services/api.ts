@@ -1,7 +1,9 @@
 import type {
   Game, Product, Wallet, Category, WinnerRecord, GameFilterState,
   GameStatisticsData, User, UserStats, Favorite, Notification,
-  PaymentSubmission, WithdrawalRequest, UserAdminRecord, HistoryRecord
+  PaymentSubmission, WithdrawalRequest, UserAdminRecord, HistoryRecord,
+  ProductDelivery, SellerRating, Report, PlatformSetting, SellerStats,
+  AdminPlatformAnalytics, Seller
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -36,6 +38,30 @@ export const MOCK_CATEGORIES: Category[] = [
   { id: 7, name: 'Vehicles', slug: 'vehicles', icon: 'car', description: 'Electric scooters, motorbikes, and auto gear', gameCount: 5 },
   { id: 8, name: 'Other', slug: 'other', icon: 'package', description: 'Gift cards, vouchers, collectibles, and novelty items', gameCount: 7 },
 ];
+
+export const extractErrorMessage = (data: any, defaultMsg: string = 'Operation failed'): string => {
+  if (!data) return defaultMsg;
+  if (typeof data === 'string') return data;
+  if (data.error && typeof data.error === 'string') return data.error;
+  if (data.detail && typeof data.detail === 'string') return data.detail;
+  if (data.message && typeof data.message === 'string') return data.message;
+  if (typeof data === 'object') {
+    const messages: string[] = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (key === 'success') continue;
+      const fieldName = key.replace(/_/g, ' ');
+      if (Array.isArray(value)) {
+        messages.push(`${fieldName}: ${value.join(', ')}`);
+      } else if (typeof value === 'string') {
+        messages.push(`${fieldName}: ${value}`);
+      } else if (typeof value === 'object' && value !== null) {
+        messages.push(`${fieldName}: ${JSON.stringify(value)}`);
+      }
+    }
+    if (messages.length > 0) return messages.join(' | ');
+  }
+  return defaultMsg;
+};
 
 export const normalizeProduct = (raw: any): Product => {
   if (!raw) {
@@ -233,16 +259,6 @@ export const applySellerAPI = async (businessName: string, phoneNumber: string, 
   } catch (e) {
     return { success: false, message: "Network error submitting seller application." };
   }
-};
-
-export const fetchPendingSellersAPI = async (): Promise<any[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/sellers/pending/`, {
-      headers: getAuthHeaders()
-    });
-    if (res.ok) return await res.json();
-  } catch (e) {}
-  return [];
 };
 
 export const approveAdminSellerAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
@@ -920,4 +936,635 @@ export const fetchWinnersHistory = async (): Promise<WinnerRecord[]> => {
   } catch (e) {}
   return [];
 };
+
+// ==========================================
+// DEVELOPER 3: PRODUCTS & FULFILLMENT APIS
+// ==========================================
+
+export const normalizeDelivery = (raw: any): ProductDelivery => {
+  return {
+    id: raw.id,
+    gameId: raw.game_result?.game || raw.game_id || raw.gameId,
+    gameTitle: raw.game_title || raw.gameTitle || 'Competition Prize',
+    productTitle: raw.product_title || raw.productTitle || 'Product',
+    productImage: raw.product_image || raw.productImage || '',
+    winnerName: raw.winner_name || raw.winnerName || 'Winner',
+    sellerName: raw.seller_name || raw.sellerName || 'Seller',
+    sellerPhone: raw.seller_phone || raw.sellerPhone || '',
+    deliveryAddress: raw.delivery_address || raw.deliveryAddress || '',
+    phoneNumber: raw.phone_number || raw.phoneNumber || '',
+    trackingCode: raw.tracking_code || raw.trackingCode || '',
+    status: raw.status || 'PREPARING',
+    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updated_at || raw.updatedAt || new Date().toISOString()
+  };
+};
+
+export const fetchProductsAPI = async (statusFilter?: string, myOnly?: boolean): Promise<Product[]> => {
+  try {
+    let url = `${API_BASE_URL}/products/`;
+    const params = new URLSearchParams();
+    if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
+    if (myOnly) params.append('my', 'true');
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map(normalizeProduct);
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const fetchSellerProductsAPI = async (): Promise<Product[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/my_products/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map(normalizeProduct);
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const createProductAPI = async (productData: Partial<Product>): Promise<{ success: boolean; product?: Product; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        title: productData.title,
+        category: productData.category,
+        description: productData.description,
+        image_url: productData.imageUrl,
+        condition: productData.condition || 'NEW',
+        estimated_value: productData.estimatedValue,
+        location: productData.location || 'Addis Ababa'
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, product: normalizeProduct(data), message: 'Product submitted successfully for admin review!' };
+    }
+    return { success: false, message: extractErrorMessage(data, 'Failed to create product.') };
+  } catch (e) {
+    return { success: false, message: 'Network error creating product.' };
+  }
+};
+
+export const updateProductAPI = async (id: number, productData: Partial<Product>): Promise<{ success: boolean; product?: Product; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/${id}/`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        title: productData.title,
+        category: productData.category,
+        description: productData.description,
+        image_url: productData.imageUrl,
+        condition: productData.condition,
+        estimated_value: productData.estimatedValue,
+        location: productData.location
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, product: normalizeProduct(data), message: 'Product updated successfully.' };
+    }
+    return { success: false, message: extractErrorMessage(data, 'Failed to update product.') };
+  } catch (e) {
+    return { success: false, message: 'Network error updating product.' };
+  }
+};
+
+export const deleteProductAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/${id}/`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      return { success: true, message: 'Product deleted successfully.' };
+    }
+    const data = await res.json().catch(() => ({}));
+    return { success: false, message: data.error || 'Failed to delete product.' };
+  } catch (e) {
+    return { success: false, message: 'Network error deleting product.' };
+  }
+};
+
+export const approveProductAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/${id}/approve/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Product approved!' };
+    return { success: false, message: data.error || 'Failed to approve product.' };
+  } catch (e) {
+    return { success: false, message: 'Network error approving product.' };
+  }
+};
+
+export const rejectProductAPI = async (id: number, reason?: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/products/${id}/reject/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Product rejected.' };
+    return { success: false, message: data.error || 'Failed to reject product.' };
+  } catch (e) {
+    return { success: false, message: 'Network error rejecting product.' };
+  }
+};
+
+// ==========================================
+// SELLER PORTAL & STATS APIS
+// ==========================================
+
+export const fetchSellerProfileAPI = async (): Promise<Seller | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/me/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        id: data.id,
+        businessName: data.business_name,
+        description: data.description || '',
+        phoneNumber: data.phone_number,
+        address: data.address,
+        status: data.status
+      };
+    }
+  } catch (e) {}
+  return null;
+};
+
+export const updateSellerProfileAPI = async (data: Partial<Seller>): Promise<{ success: boolean; seller?: Seller; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/me/`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        business_name: data.businessName,
+        description: data.description,
+        phone_number: data.phoneNumber,
+        address: data.address
+      })
+    });
+    const resData = await res.json();
+    if (res.ok) {
+      return {
+        success: true,
+        seller: {
+          id: resData.id,
+          businessName: resData.business_name,
+          description: resData.description || '',
+          phoneNumber: resData.phone_number,
+          address: resData.address,
+          status: resData.status
+        },
+        message: 'Seller profile updated successfully.'
+      };
+    }
+    return { success: false, message: resData.error || 'Failed to update seller profile.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating seller profile.' };
+  }
+};
+
+export const fetchSellerStatsAPI = async (): Promise<SellerStats> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/stats/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const d = await res.json();
+      return {
+        totalProducts: d.total_products || 0,
+        activeProducts: d.active_products || 0,
+        totalGames: d.total_games || 0,
+        activeGames: d.active_games || 0,
+        completedGames: d.completed_games || 0,
+        totalRevenueEtb: d.total_revenue_etb || 0,
+        pendingDeliveries: d.pending_deliveries || 0,
+        completedDeliveries: d.completed_deliveries || 0,
+        averageRating: d.average_rating || 0,
+        ratingCount: d.rating_count || 0,
+        walletBalance: d.wallet_balance || 0
+      };
+    }
+  } catch (e) {}
+  return {
+    totalProducts: 0,
+    activeProducts: 0,
+    totalGames: 0,
+    activeGames: 0,
+    completedGames: 0,
+    totalRevenueEtb: 0,
+    pendingDeliveries: 0,
+    completedDeliveries: 0,
+    averageRating: 0,
+    ratingCount: 0,
+    walletBalance: 0
+  };
+};
+
+export const fetchSellerAnalyticsAPI = async (): Promise<any> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/analytics/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return { games_performance: [], ratings_breakdown: {}, recent_reviews: [] };
+};
+
+export const fetchSellerGamesAPI = async (): Promise<Game[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/seller_games/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map(normalizeGame);
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const createSellerGameAPI = async (gameData: any): Promise<{ success: boolean; game?: Game; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/games/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(gameData)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, game: normalizeGame(data), message: 'Competition created and submitted for admin review!' };
+    }
+    return { success: false, message: extractErrorMessage(data, 'Failed to create competition.') };
+  } catch (e) {
+    return { success: false, message: 'Network error creating competition.' };
+  }
+};
+
+export const fetchPendingSellersAPI = async (): Promise<Seller[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/pending/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.map((s: any) => ({
+        id: s.id,
+        user: s.user,
+        username: s.username || (s.user ? `User #${s.user}` : 'Applicant'),
+        businessName: s.business_name || s.businessName || 'Unnamed Store',
+        business_name: s.business_name || s.businessName || 'Unnamed Store',
+        description: s.description || '',
+        phoneNumber: s.phone_number || s.phoneNumber || 'N/A',
+        phone_number: s.phone_number || s.phoneNumber || 'N/A',
+        address: s.address || 'Addis Ababa',
+        status: s.status || 'PENDING'
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const approveSellerAPI = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/${id}/approve/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Seller approved.' };
+    return { success: false, message: data.error || 'Failed to approve seller.' };
+  } catch (e) {
+    return { success: false, message: 'Network error approving seller.' };
+  }
+};
+
+export const rejectSellerAPI = async (id: number, reason?: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sellers/${id}/reject/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Seller rejected.' };
+    return { success: false, message: data.error || 'Failed to reject seller.' };
+  } catch (e) {
+    return { success: false, message: 'Network error rejecting seller.' };
+  }
+};
+
+// ==========================================
+// FULFILLMENT & DELIVERIES APIS
+// ==========================================
+
+export const fetchDeliveriesAPI = async (): Promise<ProductDelivery[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/deliveries/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map(normalizeDelivery);
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const updateDeliveryStatusAPI = async (id: number, status: string, trackingCode?: string): Promise<{ success: boolean; delivery?: ProductDelivery; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/deliveries/${id}/update_status/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status, tracking_code: trackingCode })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, delivery: normalizeDelivery(data.delivery), message: data.message || 'Delivery updated.' };
+    }
+    return { success: false, message: data.error || 'Failed to update delivery.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating delivery.' };
+  }
+};
+
+export const updateDeliveryAddressAPI = async (id: number, deliveryAddress: string, phoneNumber: string): Promise<{ success: boolean; delivery?: ProductDelivery; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/deliveries/${id}/update_address/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ delivery_address: deliveryAddress, phone_number: phoneNumber })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, delivery: normalizeDelivery(data.delivery), message: data.message || 'Address updated.' };
+    }
+    return { success: false, message: data.error || 'Failed to update address.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating delivery address.' };
+  }
+};
+
+// ==========================================
+// SELLER RATINGS & REVIEWS APIS
+// ==========================================
+
+export const fetchSellerRatingsAPI = async (sellerId?: number): Promise<SellerRating[]> => {
+  try {
+    const query = sellerId ? `?seller_id=${sellerId}` : '';
+    const res = await fetch(`${API_BASE_URL}/ratings/${query}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((r: any) => ({
+        id: r.id,
+        seller: r.seller,
+        sellerName: r.seller_name,
+        user: r.user,
+        userUsername: r.user_username,
+        game: r.game,
+        rating: r.rating,
+        review: r.review,
+        createdAt: r.created_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const submitSellerRatingAPI = async (data: { seller: number; rating: number; review?: string; game?: number }): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/ratings/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    const resData = await res.json();
+    if (res.ok) {
+      return { success: true, message: 'Review submitted successfully!' };
+    }
+    return { success: false, message: resData.error || 'Failed to submit review.' };
+  } catch (e) {
+    return { success: false, message: 'Network error submitting review.' };
+  }
+};
+
+// ==========================================
+// REPORTS & MODERATION APIS
+// ==========================================
+
+export const submitReportAPI = async (data: { targetType: string; targetId: number; targetLabel?: string; category: string; reason: string }): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/reports/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        target_type: data.targetType,
+        target_id: data.targetId,
+        target_label: data.targetLabel || '',
+        category: data.category,
+        reason: data.reason
+      })
+    });
+    const resData = await res.json();
+    if (res.ok) {
+      return { success: true, message: 'Report submitted to moderators. Thank you for keeping the community safe.' };
+    }
+    return { success: false, message: resData.error || 'Failed to submit report.' };
+  } catch (e) {
+    return { success: false, message: 'Network error submitting report.' };
+  }
+};
+
+export const fetchAdminReportsAPI = async (statusFilter?: string): Promise<Report[]> => {
+  try {
+    const query = statusFilter && statusFilter !== 'ALL' ? `?status=${statusFilter}` : '';
+    const res = await fetch(`${API_BASE_URL}/reports/${query}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((r: any) => ({
+        id: r.id,
+        reporter: r.reporter,
+        reporterUsername: r.reporter_username,
+        targetType: r.target_type,
+        targetId: r.target_id,
+        targetLabel: r.target_label,
+        category: r.category,
+        reason: r.reason,
+        status: r.status,
+        moderator: r.moderator,
+        moderatorUsername: r.moderator_username,
+        resolutionNote: r.resolution_note,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const resolveReportAPI = async (id: number, resolutionNote: string, status: string = 'RESOLVED', actionTaken: string = 'NO_ACTION'): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/reports/${id}/resolve/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ resolution_note: resolutionNote, status, action_taken: actionTaken })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Report updated.' };
+    return { success: false, message: data.error || 'Failed to resolve report.' };
+  } catch (e) {
+    return { success: false, message: 'Network error resolving report.' };
+  }
+};
+
+// ==========================================
+// PLATFORM SETTINGS APIS
+// ==========================================
+
+export const fetchPlatformSettingsAPI = async (): Promise<PlatformSetting[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/settings/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data) ? data : (data.results || []);
+      return rawList.map((s: any) => ({
+        id: s.id,
+        key: s.key,
+        value: s.value,
+        description: s.description || '',
+        updatedAt: s.updated_at
+      }));
+    }
+  } catch (e) {}
+  return [];
+};
+
+export const updatePlatformSettingsAPI = async (settings: Array<{ key: string; value: string; description?: string }> | Record<string, string>): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/settings/update_settings/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ settings })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'Settings saved.' };
+    return { success: false, message: data.error || 'Failed to update settings.' };
+  } catch (e) {
+    return { success: false, message: 'Network error updating settings.' };
+  }
+};
+
+// ==========================================
+// ADMIN USER BANS & PLATFORM ANALYTICS APIS
+// ==========================================
+
+export const banUserAPI = async (userId: number, reason: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/ban/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'User banned.' };
+    return { success: false, message: data.error || 'Failed to ban user.' };
+  } catch (e) {
+    return { success: false, message: 'Network error banning user.' };
+  }
+};
+
+export const unbanUserAPI = async (userId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/unban/`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) return { success: true, message: data.message || 'User unbanned.' };
+    return { success: false, message: data.error || 'Failed to unban user.' };
+  } catch (e) {
+    return { success: false, message: 'Network error unbanning user.' };
+  }
+};
+
+export const fetchAdminPlatformAnalyticsAPI = async (): Promise<AdminPlatformAnalytics | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/analytics/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const d = await res.json();
+      return {
+        users: {
+          total: d.users?.total || 0,
+          active: d.users?.active || 0,
+          banned: d.users?.banned || 0,
+          verifiedSellers: d.users?.verified_sellers || 0,
+          pendingSellers: d.users?.pending_sellers || 0
+        },
+        competitions: {
+          total: d.competitions?.total || 0,
+          active: d.competitions?.active || 0,
+          completed: d.competitions?.completed || 0,
+          pendingApproval: d.competitions?.pending_approval || 0,
+          totalEntries: d.competitions?.total_entries || 0
+        },
+        products: {
+          total: d.products?.total || 0,
+          approved: d.products?.approved || 0,
+          pending: d.products?.pending || 0,
+          rejected: d.products?.rejected || 0
+        },
+        financials: {
+          totalDepositsEtb: d.financials?.total_deposits_etb || 0,
+          pendingDepositsCount: d.financials?.pending_deposits_count || 0,
+          totalWithdrawalsEtb: d.financials?.total_withdrawals_etb || 0,
+          pendingWithdrawalsCount: d.financials?.pending_withdrawals_count || 0,
+          platformVolumeEtb: d.financials?.platform_volume_etb || 0
+        },
+        fulfillment: {
+          totalDeliveries: d.fulfillment?.total_deliveries || 0,
+          pendingDeliveries: d.fulfillment?.pending_deliveries || 0,
+          completedDeliveries: d.fulfillment?.completed_deliveries || 0
+        },
+        moderation: {
+          pendingReports: d.moderation?.pending_reports || 0
+        }
+      };
+    }
+  } catch (e) {}
+  return null;
+};
+
 

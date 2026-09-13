@@ -71,6 +71,8 @@ export interface UserAdminRecord {
   isActive: boolean;
   dateJoined: string;
   phoneNumber?: string;
+  banReason?: string;
+  bannedAt?: string;
 }
 
 export interface UserStats {
@@ -84,15 +86,21 @@ export interface UserStats {
 
 export interface Seller {
   id: number;
+  user?: number;
+  username?: string;
   businessName: string;
+  business_name?: string;
   description: string;
   phoneNumber: string;
+  phone_number?: string;
   address: string;
   status: 'PENDING' | 'VERIFIED' | 'SUSPENDED' | 'REJECTED';
 }
 
 export interface Product {
   id: number;
+  sellerId?: number;
+  sellerName?: string;
   title: string;
   category: string;
   description: string;
@@ -101,6 +109,7 @@ export interface Product {
   estimatedValue: number;
   location: string;
   approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt?: string;
 }
 
 export interface Game {
@@ -270,14 +279,112 @@ export interface Notification {
 
 export interface ProductDelivery {
   id: number;
+  gameId?: number;
   gameTitle: string;
+  productTitle?: string;
+  productImage?: string;
   winnerName: string;
   sellerName: string;
+  sellerPhone?: string;
   deliveryAddress: string;
   phoneNumber: string;
   trackingCode?: string;
   status: DeliveryStatus;
+  createdAt?: string;
   updatedAt: string;
+}
+
+export interface SellerRating {
+  id: number;
+  seller: number;
+  sellerName?: string;
+  user?: number;
+  userUsername?: string;
+  game?: number;
+  rating: number;
+  review: string;
+  createdAt: string;
+}
+
+export type ReportTargetType = 'USER' | 'SELLER' | 'GAME' | 'PRODUCT';
+export type ReportCategory = 'SCAM' | 'MISLEADING' | 'INAPPROPRIATE' | 'NON_DELIVERY' | 'OTHER';
+export type ReportStatus = 'PENDING' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED';
+
+export interface Report {
+  id: number;
+  reporter?: number;
+  reporterUsername?: string;
+  targetType: ReportTargetType;
+  targetId: number;
+  targetLabel?: string;
+  category: ReportCategory;
+  reason: string;
+  status: ReportStatus;
+  moderator?: number;
+  moderatorUsername?: string;
+  resolutionNote?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface PlatformSetting {
+  id: number;
+  key: string;
+  value: string;
+  description: string;
+  updatedAt: string;
+}
+
+export interface SellerStats {
+  totalProducts: number;
+  activeProducts: number;
+  totalGames: number;
+  activeGames: number;
+  completedGames: number;
+  totalRevenueEtb: number;
+  pendingDeliveries: number;
+  completedDeliveries: number;
+  averageRating: number;
+  ratingCount: number;
+  walletBalance: number;
+}
+
+export interface AdminPlatformAnalytics {
+  users: {
+    total: number;
+    active: number;
+    banned: number;
+    verifiedSellers: number;
+    pendingSellers: number;
+  };
+  competitions: {
+    total: number;
+    active: number;
+    completed: number;
+    pendingApproval: number;
+    totalEntries: number;
+  };
+  products: {
+    total: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+  };
+  financials: {
+    totalDepositsEtb: number;
+    pendingDepositsCount: number;
+    totalWithdrawalsEtb: number;
+    pendingWithdrawalsCount: number;
+    platformVolumeEtb: number;
+  };
+  fulfillment: {
+    totalDeliveries: number;
+    pendingDeliveries: number;
+    completedDeliveries: number;
+  };
+  moderation: {
+    pendingReports: number;
+  };
 }
 
 export interface AnalyticsSummary {
