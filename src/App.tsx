@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { Role, Game, Wallet, User } from './types';
-import { fetchGames, fetchWallet, resolveGameAPI, createGameAPI, updateGameAPI, deductWalletBalance, logoutUserAPI, fetchUserProfileAPI } from './services/api';
+import { fetchGames, fetchWallet, resolveGameAPI, createGameAPI, updateGameAPI, deductWalletBalance, logoutUserAPI, fetchUserProfileAPI, telegramAuthAPI } from './services/api';
+import { initTelegramSDK, getTelegramAuthPayload, type TelegramAuthPayload } from './services/telegramService';
+import { TelegramDevBanner } from './components/TelegramDevBanner';
 import { Navbar } from './components/Navbar';
 import { WalletModal } from './components/WalletModal';
 import { AuthModal } from './components/AuthModal';
@@ -12,6 +14,7 @@ import { UserDashboardPage } from './pages/UserDashboardPage';
 import { SellerDashboardPage } from './pages/SellerDashboardPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { WinnerRevealModal } from './components/WinnerRevealModal';
+import { FloatingToastBanner } from './components/FloatingToastBanner';
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<Role>('USER');
@@ -22,6 +25,8 @@ export function App() {
   
   const [wallet, setWallet] = useState<Wallet>({ balance: 0, reservedBalance: 0, availableBalance: 0, transactions: [] });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeTelegramId, setActiveTelegramId] = useState<string>(getTelegramAuthPayload().telegram_id);
+
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMsg, setAuthModalMsg] = useState<string | undefined>(undefined);
@@ -34,6 +39,35 @@ export function App() {
     winningValue?: string;
     details?: string;
   } | null>(null);
+
+  const performTelegramAuth = async (tgPayload?: TelegramAuthPayload) => {
+    const payload = tgPayload || getTelegramAuthPayload();
+    const res = await telegramAuthAPI(payload);
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      if (res.user.role) setCurrentRole(res.user.role);
+      if (res.wallet) setWallet(res.wallet);
+    }
+  };
+
+  const handleSwitchTelegramUser = async (newId: string) => {
+    setActiveTelegramId(newId);
+    const payload: TelegramAuthPayload = {
+      initData: '',
+      telegram_id: newId,
+      username: `dev_${newId}`,
+      first_name: `Test User ${newId}`,
+      isFallback: true
+    };
+    const res = await telegramAuthAPI(payload);
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      if (res.user.role) setCurrentRole(res.user.role);
+      const loadedWallet = await fetchWallet();
+      setWallet(loadedWallet);
+      triggerToast(`Switched Telegram User to ${res.user.first_name || res.user.username} [${res.user.role}]`);
+    }
+  };
 
   const loadInitialData = async () => {
     const loadedGames = await fetchGames();
@@ -52,6 +86,8 @@ export function App() {
   };
 
   useEffect(() => {
+    initTelegramSDK();
+    performTelegramAuth();
     loadInitialData();
 
     const handleWalletUpdate = () => {
@@ -180,6 +216,9 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
       
+      {/* Telegram Local Browser Dev Sandbox Banner */}
+      <TelegramDevBanner activeTelegramId={activeTelegramId} onSwitchTelegramUser={handleSwitchTelegramUser} />
+
       {/* Top Navbar */}
       <Navbar
         currentRole={currentRole}
@@ -219,12 +258,11 @@ export function App() {
         }}
       />
 
-      {/* Toast Notification Popup */}
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 px-5 py-3 bg-slate-900 border border-cyan-500/40 text-cyan-300 font-bold text-xs rounded-2xl shadow-2xl shadow-cyan-500/20 animate-bounce">
-          ✨ {toastMsg}
-        </div>
-      )}
+      {/* Toast Notification Popup Banner */}
+      <FloatingToastBanner
+        statusMsg={toastMsg}
+        onClearStatus={() => setToastMsg(null)}
+      />
 
       {/* Main Container Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 pb-16">

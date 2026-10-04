@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, ShieldCheck, Package, Gamepad2, X, CheckCircle2, Store,
   Upload, Trophy, Clock, Truck, Star, AlertTriangle, Edit3,
-  BarChart3, Phone, MapPin, Loader2
+  BarChart3, Phone, MapPin, Loader2, ShieldAlert
 } from 'lucide-react';
 import type { Game, GameType, Product, Seller, SellerStats, ProductDelivery } from '../types';
 import { DeliveryTracker } from '../components/DeliveryTracker';
+import { FloatingToastBanner } from '../components/FloatingToastBanner';
 import {
   fetchSellerProfileAPI, updateSellerProfileAPI, fetchSellerStatsAPI,
   fetchSellerAnalyticsAPI, fetchSellerProductsAPI, createProductAPI,
@@ -63,6 +64,7 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
   const [submittingGame, setSubmittingGame] = useState(false);
   const [gameModalError, setGameModalError] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
 
   // Product Form State
   const [pTitle, setPTitle] = useState('');
@@ -220,9 +222,15 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
     }
   };
 
-  const handleDeleteProduct = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    const res = await deleteProductAPI(id);
+  const handleDeleteProduct = (prod: Product) => {
+    setConfirmDeleteProduct(prod);
+  };
+
+  const executeDeleteProduct = async () => {
+    if (!confirmDeleteProduct) return;
+    const prodId = confirmDeleteProduct.id;
+    setConfirmDeleteProduct(null);
+    const res = await deleteProductAPI(prodId);
     if (res.success) {
       notifySuccess('Product deleted successfully.');
       loadAllSellerData();
@@ -380,19 +388,12 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
       {loading && (
         <div className="text-xs text-cyan-400 font-mono animate-pulse">Syncing portal telemetry...</div>
       )}
-      {/* Alert Notifications */}
-      {statusMsg && (
-        <div className="p-4 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 rounded-2xl flex items-center gap-3 font-semibold text-sm shadow-lg animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
-          <span>{statusMsg}</span>
-        </div>
-      )}
-      {errorMsg && (
-        <div className="p-4 bg-rose-950/80 border border-rose-500/40 text-rose-300 rounded-2xl flex items-center gap-3 font-semibold text-sm shadow-lg animate-fadeIn">
-          <AlertTriangle className="w-5 h-5 flex-shrink-0 text-rose-400" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
+      <FloatingToastBanner
+        statusMsg={statusMsg}
+        errorMsg={errorMsg}
+        onClearStatus={() => setStatusMsg('')}
+        onClearError={() => setErrorMsg('')}
+      />
 
       {/* Seller Portal Header */}
       <div className="glass-panel p-6 sm:p-8 border border-cyan-500/30 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/30 shadow-2xl">
@@ -634,7 +635,7 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteProduct(p.id)}
+                            onClick={() => handleDeleteProduct(p)}
                             className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded-lg text-xs font-bold border border-rose-500/30 transition-colors"
                           >
                             Delete
@@ -1494,6 +1495,47 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Product Confirmation Modal */}
+      {confirmDeleteProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-md bg-slate-900 border border-rose-500/30 rounded-3xl p-6 shadow-2xl space-y-4 font-sans"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-400" /> Delete Product Listing
+              </h3>
+              <button
+                onClick={() => setConfirmDeleteProduct(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300">
+              Are you sure you want to delete <span className="font-bold text-white">"{confirmDeleteProduct.title}"</span>? This action cannot be undone.
+            </p>
+            <div className="pt-3 border-t border-slate-800 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteProduct(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDeleteProduct}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/20"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

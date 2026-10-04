@@ -341,13 +341,13 @@ export const WalletModal: React.FC<WalletModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                 <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-0.5">
                   <div className="text-[10px] text-purple-400 font-sans font-bold uppercase">Commercial Bank of Ethiopia (CBE)</div>
-                  <div className="text-slate-300 text-[11px]">Holder: <strong className="text-slate-100 font-sans">Beimnet Melese Kebede</strong></div>
+                  <div className="text-slate-300 text-[11px]">Holder: <strong className="text-slate-100 font-sans">Beiment Melese</strong></div>
                   <div className="text-slate-300 text-[11px]">Acc No: <strong className="text-amber-300 font-bold">1000723053718</strong></div>
                 </div>
 
                 <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-0.5">
                   <div className="text-[10px] text-cyan-400 font-sans font-bold uppercase">Telebirr Mobile Money</div>
-                  <div className="text-slate-300 text-[11px]">Holder: <strong className="text-slate-100 font-sans">Beimnet Melese Kebede</strong></div>
+                  <div className="text-slate-300 text-[11px]">Holder: <strong className="text-slate-100 font-sans">Beiment Melese</strong></div>
                   <div className="text-slate-300 text-[11px]">Acc No: <strong className="text-cyan-300 font-bold">+251963659350</strong></div>
                 </div>
               </div>

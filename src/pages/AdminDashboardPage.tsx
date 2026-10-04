@@ -9,6 +9,8 @@ import type {
   Product, Report, AdminPlatformAnalytics
 } from '../types';
 import { IconShield } from '../components/Icons';
+import { AdminActionReasonModal } from '../components/AdminActionReasonModal';
+import { FloatingToastBanner } from '../components/FloatingToastBanner';
 import {
   fetchAdminDepositsAPI, approveAdminDepositAPI, rejectAdminDepositAPI,
   fetchAdminWithdrawalsAPI, approveAdminWithdrawalAPI, rejectAdminWithdrawalAPI,
@@ -38,6 +40,18 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const [rejectingGame, setRejectingGame] = useState<Game | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
   const [previewProofUrl, setPreviewProofUrl] = useState<string | null>(null);
+
+  // Professional Modal Action State
+  const [actionModalConfig, setActionModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle?: string;
+    defaultReason?: string;
+    placeholder?: string;
+    confirmButtonText?: string;
+    confirmButtonVariant?: 'danger' | 'warning' | 'primary';
+    onConfirm: (reason: string) => void;
+  } | null>(null);
 
   // Live Backend Data States
   const [payments, setPayments] = useState<PaymentSubmission[]>([]);
@@ -99,33 +113,51 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleRejectProduct = async (id: number) => {
-    const reason = window.prompt("Reason for rejecting product:", "Product does not meet platform quality criteria");
-    if (!reason) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await rejectProductAPI(id, reason);
-    if (res.success) {
-      setStatusMsg(res.message);
-      fetchProductsAPI().then(prods => setProducts(prods));
-    } else {
-      setErrorMsg(res.message);
-    }
+  const handleRejectProduct = (id: number) => {
+    setActionModalConfig({
+      isOpen: true,
+      title: 'Reject Product Listing',
+      subtitle: `Rejecting product listing #${id}`,
+      defaultReason: 'Product does not meet platform quality criteria',
+      confirmButtonText: 'Confirm Rejection',
+      confirmButtonVariant: 'danger',
+      onConfirm: async (reason: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await rejectProductAPI(id, reason);
+        if (res.success) {
+          setStatusMsg(res.message);
+          fetchProductsAPI().then(prods => setProducts(prods));
+        } else {
+          setErrorMsg(res.message);
+        }
+      }
+    });
   };
 
-  const handleResolveReport = async (id: number, actionTaken: string = 'NO_ACTION') => {
-    const note = window.prompt("Resolution note:", actionTaken === 'BAN_USER' ? "Target user banned by moderation team" : "Ticket verified and closed");
-    if (!note) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await resolveReportAPI(id, note, 'RESOLVED', actionTaken);
-    if (res.success) {
-      setStatusMsg(res.message);
-      fetchAdminReportsAPI().then(reps => setReports(reps));
-      fetchAdminUsersAPI().then(usrList => setUsers(usrList));
-    } else {
-      setErrorMsg(res.message);
-    }
+  const handleResolveReport = (id: number, actionTaken: string = 'NO_ACTION') => {
+    setActionModalConfig({
+      isOpen: true,
+      title: 'Resolve Moderation Report',
+      subtitle: `Resolving report #${id} (${actionTaken})`,
+      defaultReason: actionTaken === 'BAN_USER' ? 'Target user banned by moderation team' : 'Ticket verified and closed',
+      confirmButtonText: 'Resolve Report',
+      confirmButtonVariant: 'primary',
+      onConfirm: async (note: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await resolveReportAPI(id, note, 'RESOLVED', actionTaken);
+        if (res.success) {
+          setStatusMsg(res.message);
+          fetchAdminReportsAPI().then(reps => setReports(reps));
+          fetchAdminUsersAPI().then(usrList => setUsers(usrList));
+        } else {
+          setErrorMsg(res.message);
+        }
+      }
+    });
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -146,22 +178,30 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleBanUser = async (userId: number, username: string) => {
-    const reason = window.prompt(`Enter ban reason for @${username}:`, "Violation of platform terms and competition rules");
-    if (!reason) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await banUserAPI(userId, reason);
-    if (res.success) {
-      setStatusMsg(res.message);
-      fetchAdminUsersAPI().then(usrList => setUsers(usrList));
-    } else {
-      setErrorMsg(res.message);
-    }
+  const handleBanUser = (userId: number, username: string) => {
+    setActionModalConfig({
+      isOpen: true,
+      title: `Ban User @${username}`,
+      subtitle: `Suspending user account #${userId}`,
+      defaultReason: 'Violation of platform terms and competition rules',
+      confirmButtonText: 'Ban User Account',
+      confirmButtonVariant: 'danger',
+      onConfirm: async (reason: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await banUserAPI(userId, reason);
+        if (res.success) {
+          setStatusMsg(res.message);
+          fetchAdminUsersAPI().then(usrList => setUsers(usrList));
+        } else {
+          setErrorMsg(res.message);
+        }
+      }
+    });
   };
 
-  const handleUnbanUser = async (userId: number, username: string) => {
-    if (!window.confirm(`Lift ban on user @${username}?`)) return;
+  const handleUnbanUser = async (userId: number) => {
     setStatusMsg('');
     setErrorMsg('');
     const res = await unbanUserAPI(userId);
@@ -197,26 +237,34 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleRejectDeposit = async (id: number) => {
-    const note = window.prompt("Reason for rejecting deposit:", "Invalid transaction reference or proof mismatch");
-    if (!note) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await rejectAdminDepositAPI(id, note);
-    if (res.success) {
-      setStatusMsg(res.message);
-      const updatedList = await fetchAdminDepositsAPI(paymentFilter);
-      setPayments(updatedList);
-      if (inspectingDeposit?.id === id) {
-        setInspectingDeposit(updatedList.find(p => p.id === id) || null);
+  const handleRejectDeposit = (id: number) => {
+    setActionModalConfig({
+      isOpen: true,
+      title: 'Reject Deposit Submission',
+      subtitle: `Rejecting payment deposit request #${id}`,
+      defaultReason: 'Invalid transaction reference or proof mismatch',
+      confirmButtonText: 'Reject Deposit',
+      confirmButtonVariant: 'danger',
+      onConfirm: async (note: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await rejectAdminDepositAPI(id, note);
+        if (res.success) {
+          setStatusMsg(res.message);
+          const updatedList = await fetchAdminDepositsAPI(paymentFilter);
+          setPayments(updatedList);
+          if (inspectingDeposit?.id === id) {
+            setInspectingDeposit(updatedList.find(p => p.id === id) || null);
+          }
+        } else {
+          setErrorMsg(res.message);
+        }
       }
-    } else {
-      setErrorMsg(res.message);
-    }
+    });
   };
 
   const handleDeleteDepositLog = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this payment verification log?")) return;
     setStatusMsg('');
     setErrorMsg('');
     const res = await deleteAdminDepositLogAPI(id);
@@ -230,7 +278,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   };
 
   const handleBulkDeleteLogs = async () => {
-    if (!window.confirm(`Are you sure you want to delete deposit logs filtered by '${paymentFilter}'?`)) return;
     setStatusMsg('');
     setErrorMsg('');
     const filterVal = paymentFilter === 'ALL' ? undefined : paymentFilter;
@@ -256,18 +303,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleRejectWithdrawal = async (id: number) => {
-    const note = window.prompt("Reason for rejecting withdrawal:", "Account details mismatched or payout declined");
-    if (!note) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await rejectAdminWithdrawalAPI(id, note);
-    if (res.success) {
-      setStatusMsg(res.message);
-      fetchAdminWithdrawalsAPI(withdrawalFilter).then(list => setWithdrawals(list));
-    } else {
-      setErrorMsg(res.message);
-    }
+  const handleRejectWithdrawal = (id: number) => {
+    setActionModalConfig({
+      isOpen: true,
+      title: 'Reject Withdrawal Request',
+      subtitle: `Rejecting user withdrawal request #${id}`,
+      defaultReason: 'Account details mismatched or payout declined',
+      confirmButtonText: 'Reject Withdrawal',
+      confirmButtonVariant: 'danger',
+      onConfirm: async (note: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await rejectAdminWithdrawalAPI(id, note);
+        if (res.success) {
+          setStatusMsg(res.message);
+          fetchAdminWithdrawalsAPI(withdrawalFilter).then(list => setWithdrawals(list));
+        } else {
+          setErrorMsg(res.message);
+        }
+      }
+    });
   };
 
   const handleToggleUserStatus = async (userId: number, currentStatus: string) => {
@@ -304,18 +360,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleRejectSeller = async (id: number) => {
-    const reason = window.prompt("Reason for rejecting seller request:", "Store information unverified");
-    if (!reason) return;
-    setStatusMsg('');
-    setErrorMsg('');
-    const res = await rejectAdminSellerAPI(id, reason);
-    if (res.success) {
-      setStatusMsg(res.message);
-      fetchPendingSellersAPI().then(list => setSellers(list));
-    } else {
-      setErrorMsg(res.message);
-    }
+  const handleRejectSeller = (id: number) => {
+    setActionModalConfig({
+      isOpen: true,
+      title: 'Reject Seller Application',
+      subtitle: `Rejecting seller application #${id}`,
+      defaultReason: 'Store information unverified',
+      confirmButtonText: 'Reject Application',
+      confirmButtonVariant: 'danger',
+      onConfirm: async (reason: string) => {
+        setActionModalConfig(null);
+        setStatusMsg('');
+        setErrorMsg('');
+        const res = await rejectAdminSellerAPI(id, reason);
+        if (res.success) {
+          setStatusMsg(res.message);
+          fetchPendingSellersAPI().then(list => setSellers(list));
+        } else {
+          setErrorMsg(res.message);
+        }
+      }
+    });
   };
 
   return (
@@ -338,17 +403,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
-      {statusMsg && (
-        <div className="p-3 bg-emerald-950/80 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center gap-2 font-medium">
-          <Check className="w-4 h-4 text-emerald-400" />
-          {statusMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div className="p-3 bg-rose-950/80 border border-rose-500/40 rounded-xl text-xs text-rose-300 font-medium">
-          {errorMsg}
-        </div>
-      )}
+      <FloatingToastBanner
+        statusMsg={statusMsg}
+        errorMsg={errorMsg}
+        onClearStatus={() => setStatusMsg('')}
+        onClearError={() => setErrorMsg('')}
+      />
 
       {/* Analytics KPI Matrix */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -942,7 +1002,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleUnbanUser(u.id, u.username)}
+                          onClick={() => handleUnbanUser(u.id)}
                           className="px-2.5 py-1 rounded text-[11px] font-bold bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-600/40"
                         >
                           Unban
@@ -1584,7 +1644,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                         }`}>
                           <span className="text-[10px] font-mono uppercase text-slate-400">3. Receiver Match</span>
                           <span className="font-extrabold text-sm">{latestLog.receiverVerified ? '✓ Receiver Match' : '✕ Name Mismatch'}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">Target: Beimnet Melese</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Target: Beiment Melese</span>
                         </div>
                       </div>
 
@@ -1633,6 +1693,20 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Professional Action Reason Modal */}
+      {actionModalConfig && (
+        <AdminActionReasonModal
+          isOpen={actionModalConfig.isOpen}
+          title={actionModalConfig.title}
+          subtitle={actionModalConfig.subtitle}
+          defaultReason={actionModalConfig.defaultReason}
+          placeholder={actionModalConfig.placeholder}
+          confirmButtonText={actionModalConfig.confirmButtonText}
+          confirmButtonVariant={actionModalConfig.confirmButtonVariant}
+          onClose={() => setActionModalConfig(null)}
+          onConfirm={actionModalConfig.onConfirm}
+        />
+      )}
     </div>
   );
 };

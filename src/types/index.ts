@@ -52,14 +52,49 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   role: Role;
   accountStatus: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
   phoneNumber?: string;
   bio?: string;
   avatarUrl?: string;
+  telegram_id?: string;
+  telegram_username?: string;
+  telegram_first_name?: string;
   notificationPreferences?: Record<string, boolean>;
   privacySettings?: Record<string, boolean>;
   language?: string;
+}
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData: string;
+        initDataUnsafe?: {
+          query_id?: string;
+          user?: {
+            id: number | string;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+            photo_url?: string;
+          };
+          auth_date?: string;
+          hash?: string;
+        };
+        version?: string;
+        platform?: string;
+        ready: () => void;
+        expand: () => void;
+        close: () => void;
+      };
+    };
+  }
 }
 
 export interface UserAdminRecord {
@@ -70,7 +105,17 @@ export interface UserAdminRecord {
   accountStatus: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
   isActive: boolean;
   dateJoined: string;
+  firstName?: string;
+  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   phoneNumber?: string;
+  phone_number?: string;
+  bio?: string;
+  avatarUrl?: string;
+  avatar_url?: string;
+  telegramId?: string;
+  telegram_id?: string;
   banReason?: string;
   bannedAt?: string;
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { Wallet, User, UserStats, Favorite, Notification, Game, HistoryRecord } from '../types';
-import { IconTrophy, IconCheck } from '../components/Icons';
-import { Eye, EyeOff, Store, Package } from 'lucide-react';
+import { IconTrophy } from '../components/Icons';
+import { FloatingToastBanner } from '../components/FloatingToastBanner';
+import { Store, Package } from 'lucide-react';
 import {
-  fetchUserProfileAPI, updateUserProfileAPI, changePasswordAPI,
+  fetchUserProfileAPI, updateUserProfileAPI,
   fetchFavoritesAPI, fetchUserStatsAPI,
   fetchNotificationsAPI, markNotificationReadAPI, markAllNotificationsReadAPI,
   fetchMyGamesAPI, fetchUserHistoryAPI, applySellerAPI
@@ -24,19 +25,12 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-
-  // 3-Field Password State
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Eye Toggles for Passwords
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Seller Application Modal State
   const [showSellerModal, setShowSellerModal] = useState(false);
@@ -68,6 +62,9 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
     if (prof) {
       setUserProfile(prof);
       setUsername(prof.username || '');
+      setFirstName(prof.firstName || prof.first_name || '');
+      setLastName(prof.lastName || prof.last_name || '');
+      setEmail(prof.email || '');
       setBio(prof.bio || '');
       setPhoneNumber(prof.phoneNumber || '');
       setAvatarUrl(prof.avatarUrl || '');
@@ -97,6 +94,9 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
     setErrorMsg('');
     const res = await updateUserProfileAPI({
       username,
+      firstName,
+      lastName,
+      email,
       bio,
       phoneNumber,
       avatarUrl
@@ -109,36 +109,6 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatusMsg('');
-    setErrorMsg('');
-
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setErrorMsg("Please fill in all three password fields.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrorMsg("New password and confirm password do not match.");
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setErrorMsg("New password must be at least 6 characters.");
-      return;
-    }
-
-    const res = await changePasswordAPI(oldPassword, newPassword, confirmPassword);
-    if (res.success) {
-      setStatusMsg(res.message);
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } else {
-      setErrorMsg(res.message);
-    }
-  };
 
   const handleSellerApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,17 +180,12 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
         </div>
       </div>
 
-      {statusMsg && (
-        <div className="p-3 bg-emerald-950/80 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center gap-2 font-medium">
-          <IconCheck className="w-4 h-4 text-emerald-400" />
-          {statusMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div className="p-3 bg-rose-950/80 border border-rose-500/40 rounded-xl text-xs text-rose-300 font-medium">
-          {errorMsg}
-        </div>
-      )}
+      <FloatingToastBanner
+        statusMsg={statusMsg}
+        errorMsg={errorMsg}
+        onClearStatus={() => setStatusMsg('')}
+        onClearError={() => setErrorMsg('')}
+      />
 
       {/* Main Account Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
@@ -283,16 +248,20 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
               </h3>
               <div className="space-y-3 font-sans">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 font-medium">First / Full Name:</span>
+                  <strong className="text-slate-200 font-mono">{userProfile?.firstName || userProfile?.first_name || firstName || 'Player'}</strong>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
                   <span className="text-slate-400 font-medium">Username:</span>
                   <strong className="text-slate-200 font-mono">{userProfile?.username || username}</strong>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
                   <span className="text-slate-400 font-medium">Email Address:</span>
-                  <strong className="text-slate-200 font-mono truncate max-w-[200px]">{userProfile?.email || 'N/A'}</strong>
+                  <strong className="text-slate-200 font-mono truncate max-w-[200px]">{userProfile?.email || email || 'N/A'}</strong>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
                   <span className="text-slate-400 font-medium">Phone Number:</span>
-                  <strong className="text-slate-200 font-mono">{userProfile?.phoneNumber || 'Not Set'}</strong>
+                  <strong className="text-slate-200 font-mono">{userProfile?.phoneNumber || phoneNumber || 'Not Set'}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
                   <span className="text-slate-400 font-medium block">Personal Bio:</span>
@@ -634,13 +603,48 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB 7: SETTINGS & PASSWORD WORKFLOW */}
+      {/* TAB 7: SETTINGS */}
       {activeTab === 'settings' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="max-w-2xl mx-auto">
           {/* Edit Profile Form */}
           <form onSubmit={handleUpdateProfile} className="glass-panel p-6 space-y-4 border border-slate-800 rounded-2xl">
             <h3 className="font-extrabold text-base text-slate-100 border-b border-slate-800 pb-2">Personal Profile Details</h3>
             
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 text-xs">
+                <label className="text-slate-300 font-semibold block">First Name:</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="e.g. Shadow"
+                  className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl px-3.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="space-y-1.5 text-xs">
+                <label className="text-slate-300 font-semibold block">Last Name:</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="e.g. Player"
+                  className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl px-3.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <label className="text-slate-300 font-semibold block">Email Address:</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="user@example.com"
+                className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl px-3.5 text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
             <div className="space-y-1.5 text-xs">
               <label className="text-slate-300 font-semibold block">Username:</label>
               <input
@@ -674,75 +678,6 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
 
             <button type="submit" className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs rounded-xl shadow-md uppercase tracking-wider">
               Save Profile Changes
-            </button>
-          </form>
-
-          {/* Secure 3-Field Password Change Workflow */}
-          <form onSubmit={handleChangePassword} className="glass-panel p-6 space-y-4 border border-slate-800 rounded-2xl">
-            <h3 className="font-extrabold text-base text-slate-100 border-b border-slate-800 pb-2">Password Security Update</h3>
-            
-            <div className="space-y-1.5 text-xs">
-              <label className="text-slate-300 font-semibold block">1. Current Password:</label>
-              <div className="relative">
-                <input
-                  type={showOldPassword ? 'text' : 'password'}
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="Enter current password"
-                  className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-10 text-slate-200 focus:outline-none focus:border-cyan-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowOldPassword(!showOldPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors p-1"
-                >
-                  {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 text-xs">
-              <label className="text-slate-300 font-semibold block">2. New Password:</label>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-10 text-slate-200 focus:outline-none focus:border-cyan-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors p-1"
-                >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 text-xs">
-              <label className="text-slate-300 font-semibold block">3. Confirm New Password:</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat new password"
-                  className="w-full h-10 bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-10 text-slate-200 focus:outline-none focus:border-cyan-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors p-1"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md uppercase tracking-wider">
-              Verify & Update Password →
             </button>
           </form>
         </div>

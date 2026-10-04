@@ -129,7 +129,31 @@ export const normalizeGame = (raw: any): Game => {
   };
 };
 
-// --- AUTHENTICATION APIS ---
+export const telegramAuthAPI = async (payload: {
+  initData?: string;
+  telegram_id: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  photo_url?: string;
+}): Promise<{ success: boolean; message: string; user?: User; wallet?: Wallet; token?: string }> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/telegram/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.token) localStorage.setItem('allin_auth_token', data.token);
+      if (data.user) localStorage.setItem('allin_auth_user', JSON.stringify(data.user));
+      return { success: true, message: data.message || 'Telegram login successful.', user: data.user, wallet: data.wallet, token: data.token };
+    }
+    return { success: false, message: data.error || 'Telegram authentication failed.' };
+  } catch (err) {
+    return { success: false, message: 'Network error connecting to backend.' };
+  }
+};
 
 export const loginUserAPI = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string; user?: User; wallet?: Wallet; token?: string }> => {
   try {
@@ -190,12 +214,15 @@ export const fetchUserProfileAPI = async (): Promise<User | null> => {
     });
     if (res.ok) {
       const data = await res.json();
+      const uData = data.user || {};
       return {
         id: data.id,
-        username: data.username,
-        email: data.email,
-        role: data.role || 'USER',
-        accountStatus: data.account_status || 'ACTIVE',
+        username: uData.username || data.username || '',
+        email: uData.email || data.email || '',
+        firstName: uData.first_name || data.first_name || data.telegram_first_name || '',
+        lastName: uData.last_name || data.last_name || '',
+        role: uData.role || data.role || 'USER',
+        accountStatus: uData.account_status || data.account_status || 'ACTIVE',
         phoneNumber: data.phone_number || '',
         bio: data.bio || '',
         avatarUrl: data.avatar_url || '',
@@ -215,6 +242,9 @@ export const updateUserProfileAPI = async (profileData: Partial<User>): Promise<
       headers: getAuthHeaders(),
       body: JSON.stringify({
         username: profileData.username,
+        first_name: profileData.firstName || profileData.first_name,
+        last_name: profileData.lastName || profileData.last_name,
+        email: profileData.email,
         bio: profileData.bio,
         avatar_url: profileData.avatarUrl,
         phone_number: profileData.phoneNumber,
@@ -225,7 +255,7 @@ export const updateUserProfileAPI = async (profileData: Partial<User>): Promise<
     });
     if (res.ok) return { success: true, message: "Profile updated successfully!" };
     const err = await res.json();
-    return { success: false, message: err.error || "Failed to update profile." };
+    return { success: false, message: err.error || err.detail || "Failed to update profile." };
   } catch (e) {
     return { success: false, message: "Network error updating profile." };
   }
