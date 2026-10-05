@@ -10,6 +10,7 @@ interface NavbarProps {
   walletBalance: number;
   onOpenWallet: () => void;
   onOpenAuthModal: () => void;
+  onBecomeSeller: () => void;
   onLogout: () => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
@@ -22,6 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   walletBalance,
   onOpenWallet,
   onOpenAuthModal,
+  onBecomeSeller,
   onLogout,
   activeTab,
   onTabChange,
@@ -135,6 +137,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <UserIcon className="w-4 h-4" /> Account Hub
+            </button>
+          )}
+
+          {currentUser && currentRole === 'USER' && (
+            <button
+              onClick={onBecomeSeller}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-purple-300 border border-purple-500/30 hover:bg-purple-500/15 hover:text-purple-200"
+            >
+              <Store className="w-4 h-4 text-purple-400" /> Become a Seller
             </button>
           )}
 
@@ -280,6 +291,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center gap-2 font-bold"
                     >
                       <Store className="w-4 h-4 text-purple-400" /> Seller Dashboard
+                    </button>
+                  )}
+
+                  {currentRole === 'USER' && (
+                    <button
+                      onClick={() => { onBecomeSeller(); setShowUserMenu(false); }}
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800 text-purple-300 flex items-center gap-2 font-bold"
+                    >
+                      <Store className="w-4 h-4 text-purple-400" /> Become a Seller
                     </button>
                   )}
 

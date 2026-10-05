@@ -3,7 +3,7 @@ import type {
   GameStatisticsData, User, UserStats, Favorite, Notification,
   PaymentSubmission, WithdrawalRequest, UserAdminRecord, HistoryRecord,
   ProductDelivery, SellerRating, Report, PlatformSetting, SellerStats,
-  AdminPlatformAnalytics, Seller
+  AdminPlatformAnalytics, Seller, AdminUserDetails, UserBadgeData
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -339,6 +339,16 @@ export const fetchUserStatsAPI = async (): Promise<UserStats> => {
     }
   } catch (e) {}
   return { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, winRate: 0.0, totalEntries: 0, totalSpent: 0.0 };
+};
+
+export const fetchUserBadgesAPI = async (): Promise<UserBadgeData | null> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/badges/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return null;
 };
 
 // --- MY GAMES & GAME APIS ---
@@ -850,6 +860,20 @@ export const fetchAdminUsersAPI = async (): Promise<UserAdminRecord[]> => {
     }
   } catch (e) {}
   return [];
+};
+
+export const fetchAdminUserDetailsAPI = async (userId: number, startDate?: string, endDate?: string): Promise<AdminUserDetails | null> => {
+  try {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const query = params.toString();
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/details/${query ? `?${query}` : ''}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return null;
 };
 
 export const toggleAdminUserStatusAPI = async (userId: number, status: string): Promise<{ success: boolean; message: string }> => {
@@ -1548,9 +1572,13 @@ export const unbanUserAPI = async (userId: number): Promise<{ success: boolean; 
   }
 };
 
-export const fetchAdminPlatformAnalyticsAPI = async (): Promise<AdminPlatformAnalytics | null> => {
+export const fetchAdminPlatformAnalyticsAPI = async (startDate?: string, endDate?: string): Promise<AdminPlatformAnalytics | null> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/users/analytics/`, {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const query = params.toString();
+    const res = await fetch(`${API_BASE_URL}/users/analytics/${query ? `?${query}` : ''}`, {
       headers: getAuthHeaders()
     });
     if (res.ok) {
@@ -1559,9 +1587,13 @@ export const fetchAdminPlatformAnalyticsAPI = async (): Promise<AdminPlatformAna
         users: {
           total: d.users?.total || 0,
           active: d.users?.active || 0,
+          active30d: d.users?.active_30d || 0,
           banned: d.users?.banned || 0,
           verifiedSellers: d.users?.verified_sellers || 0,
-          pendingSellers: d.users?.pending_sellers || 0
+          pendingSellers: d.users?.pending_sellers || 0,
+          retentionRate: d.users?.retention_rate || 0,
+          retentionEligible: d.users?.retention_eligible || 0,
+          retainedUsers: d.users?.retained_users || 0
         },
         competitions: {
           total: d.competitions?.total || 0,
@@ -1577,11 +1609,39 @@ export const fetchAdminPlatformAnalyticsAPI = async (): Promise<AdminPlatformAna
           rejected: d.products?.rejected || 0
         },
         financials: {
+          periodStart: d.financials?.period_start || '',
+          periodEnd: d.financials?.period_end || '',
           totalDepositsEtb: d.financials?.total_deposits_etb || 0,
           pendingDepositsCount: d.financials?.pending_deposits_count || 0,
+          rejectedDepositsCount: d.financials?.rejected_deposits_count || 0,
+          refundedDepositsEtb: d.financials?.refunded_deposits_etb || 0,
           totalWithdrawalsEtb: d.financials?.total_withdrawals_etb || 0,
           pendingWithdrawalsCount: d.financials?.pending_withdrawals_count || 0,
-          platformVolumeEtb: d.financials?.platform_volume_etb || 0
+          rejectedWithdrawalsCount: d.financials?.rejected_withdrawals_count || 0,
+          platformVolumeEtb: d.financials?.platform_volume_etb || 0,
+          grossRevenueEtb: d.financials?.gross_revenue_etb || 0,
+          refundsEtb: d.financials?.refunds_etb || 0,
+          commissionPercent: d.financials?.commission_percent || 0,
+          commissionEtb: d.financials?.commission_etb || 0,
+          netCommissionEtb: d.financials?.net_commission_etb || 0,
+          rewardPayoutsEtb: d.financials?.reward_payouts_etb || 0,
+          averageEntryFeeEtb: d.financials?.average_entry_fee_etb || 0,
+          averageDepositEtb: d.financials?.average_deposit_etb || 0,
+          averageWithdrawalEtb: d.financials?.average_withdrawal_etb || 0,
+          gameEntryCount: d.financials?.game_entry_count || 0,
+          walletBalanceEtb: d.financials?.wallet_balance_etb || 0,
+          reservedWalletBalanceEtb: d.financials?.reserved_wallet_balance_etb || 0,
+          availableWalletBalanceEtb: d.financials?.available_wallet_balance_etb || 0,
+          pendingWithdrawalValueEtb: d.financials?.pending_withdrawal_value_etb || 0,
+          netCashFlowEtb: d.financials?.net_cash_flow_etb || 0,
+          grossProfitEtb: d.financials?.gross_profit_etb || 0,
+          netProfitEtb: d.financials?.net_profit_etb || 0,
+          cashOutflowEtb: d.financials?.cash_outflow_etb || 0,
+          payoutRatioPercent: d.financials?.payout_ratio_percent || 0,
+          refundRatePercent: d.financials?.refund_rate_percent || 0,
+          commissionMarginPercent: d.financials?.commission_margin_percent || 0,
+          depositApprovalRatePercent: d.financials?.deposit_approval_rate_percent || 0,
+          postWithdrawalLiquidityEtb: d.financials?.post_withdrawal_liquidity_etb || 0
         },
         fulfillment: {
           totalDeliveries: d.fulfillment?.total_deliveries || 0,
@@ -1590,7 +1650,15 @@ export const fetchAdminPlatformAnalyticsAPI = async (): Promise<AdminPlatformAna
         },
         moderation: {
           pendingReports: d.moderation?.pending_reports || 0
-        }
+        },
+        trends: {
+          users: d.trends?.users || [],
+          sellers: d.trends?.sellers || [],
+          games: d.trends?.games || [],
+          dailyParticipants: d.trends?.daily_participants || []
+        },
+        popularGameTypes: d.popular_game_types || [],
+        popularProducts: d.popular_products || []
       };
     }
   } catch (e) {}

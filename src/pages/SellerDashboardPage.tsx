@@ -77,7 +77,7 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
   const [productFileRef, setProductFileRef] = useState<string>('');
 
   // Game Form State
-  const [selectedProductId, setSelectedProductId] = useState<string>('NEW');
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [gTitle, setGTitle] = useState('');
   const [gType, setGType] = useState<GameType>('TREASURE_BOX');
   const [gEntryFee, setGEntryFee] = useState('200');
@@ -242,7 +242,7 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
   // --- GAME POST ACTIONS ---
   const handleOpenCreateGame = () => {
     setEditingGame(null);
-    setSelectedProductId('NEW');
+    setSelectedProductId('');
     setGTitle('');
     setGType('TREASURE_BOX');
     setGEntryFee('200');
@@ -279,31 +279,17 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
     setGameModalError('');
     const durMins = parseInt(gDurationMinutes) || 1440;
 
-    let productPayload: any = null;
-    if (selectedProductId === 'NEW') {
-      if (!pTitle.trim()) {
-        setGameModalError('Please specify product title.');
-        return;
-      }
-      productPayload = {
-        title: pTitle.trim(),
-        category: pCategory,
-        description: pDescription.trim(),
-        imageUrl: pImageUrl.trim() || 'https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=600&q=80',
-        condition: pCondition,
-        estimatedValue: parseFloat(pEstimatedValue) || 50000,
-        location: pLocation.trim() || 'Addis Ababa'
-      };
-    } else {
-      const existing = products.find(p => p.id === parseInt(selectedProductId));
-      if (existing) {
-        productPayload = { id: existing.id };
-      }
+    const selectedProduct = products.find(
+      p => p.id === parseInt(selectedProductId) && p.approvalStatus === 'APPROVED'
+    );
+    if (!selectedProduct) {
+      setGameModalError('Please select an approved product before creating a competition.');
+      return;
     }
 
     const payload = {
-      product: productPayload,
-      title: gTitle.trim() || `${pTitle || 'Competition'} - ${gType.replace(/_/g, ' ')}`,
+      product: { id: selectedProduct.id },
+      title: gTitle.trim() || `${selectedProduct.title} - ${gType.replace(/_/g, ' ')}`,
       game_type: gType,
       entry_fee: parseFloat(gEntryFee) || 100,
       max_participants: parseInt(gMaxParticipants) || 100,
@@ -1247,65 +1233,28 @@ export const SellerDashboardPage: React.FC<SellerDashboardProps> = () => {
                     value={selectedProductId}
                     onChange={(e) => {
                       setSelectedProductId(e.target.value);
-                      if (e.target.value !== 'NEW') {
-                        const sel = products.find(p => p.id === parseInt(e.target.value));
-                        if (sel) {
-                          setPTitle(sel.title);
-                          setPCategory(sel.category);
-                          setPDescription(sel.description);
-                          setPImageUrl(sel.imageUrl);
-                          setPEstimatedValue(sel.estimatedValue.toString());
-                        }
+                      const sel = products.find(p => p.id === parseInt(e.target.value));
+                      if (sel) {
+                        setPTitle(sel.title);
+                        setPCategory(sel.category);
+                        setPDescription(sel.description);
+                        setPImageUrl(sel.imageUrl);
+                        setPEstimatedValue(sel.estimatedValue.toString());
                       }
                     }}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:border-cyan-400 outline-none"
                   >
-                    <option value="NEW">+ Enter a New Product Listing Directly</option>
-                    {products.map(p => (
+                    <option value="">Select an approved product</option>
+                    {products.filter(p => p.approvalStatus === 'APPROVED').map(p => (
                       <option key={p.id} value={p.id.toString()}>
-                        [{p.approvalStatus}] {p.title} — {p.estimatedValue.toLocaleString()} ETB ({p.category})
+                        {p.title} — {p.estimatedValue.toLocaleString()} ETB ({p.category})
                       </option>
                     ))}
                   </select>
+                  {products.filter(p => p.approvalStatus === 'APPROVED').length === 0 && (
+                    <p className="text-amber-300 text-[11px]">No approved products are available. Submit a product and wait for Admin approval first.</p>
+                  )}
                 </div>
-
-                {/* If New Product is chosen, show Product fields */}
-                {selectedProductId === 'NEW' && (
-                  <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-3">
-                    <span className="text-cyan-400 font-bold text-[11px] uppercase tracking-wider">New Product Details</span>
-                    <div className="space-y-1">
-                      <input
-                        type="text"
-                        required
-                        value={pTitle}
-                        onChange={(e) => setPTitle(e.target.value)}
-                        placeholder="Product Title (e.g. Sony PlayStation 5)"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:border-cyan-400 outline-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <select
-                        value={pCategory}
-                        onChange={(e) => setPCategory(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                      >
-                        <option value="Phones">Phones</option>
-                        <option value="Gaming">Gaming</option>
-                        <option value="Laptops">Laptops</option>
-                        <option value="Electronics">Electronics</option>
-                        <option value="Fashion">Fashion</option>
-                        <option value="Other">Other</option>
-                      </select>
-                      <input
-                        type="number"
-                        value={pEstimatedValue}
-                        onChange={(e) => setPEstimatedValue(e.target.value)}
-                        placeholder="Estimated Value ETB"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                      />
-                    </div>
-                  </div>
-                )}
 
                 {/* Competition Settings */}
                 <div className="space-y-1">

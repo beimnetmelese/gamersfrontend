@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Check, ShieldAlert, Users, Store, Package, Flag, Settings,
-  BarChart3, ShieldCheck
+  BarChart3, TrendingUp, Activity, DollarSign, UserRound,
+  CalendarDays, RefreshCw, Trophy, Search, Eye, WalletCards
 } from 'lucide-react';
 import type {
   Game, PaymentSubmission, WithdrawalRequest, UserAdminRecord,
-  Product, Report, AdminPlatformAnalytics
+  Product, Report, AdminPlatformAnalytics, AdminUserDetails
 } from '../types';
 import { IconShield } from '../components/Icons';
 import { AdminActionReasonModal } from '../components/AdminActionReasonModal';
@@ -14,7 +15,7 @@ import { FloatingToastBanner } from '../components/FloatingToastBanner';
 import {
   fetchAdminDepositsAPI, approveAdminDepositAPI, rejectAdminDepositAPI,
   fetchAdminWithdrawalsAPI, approveAdminWithdrawalAPI, rejectAdminWithdrawalAPI,
-  fetchAdminUsersAPI, toggleAdminUserStatusAPI, changeAdminUserRoleAPI,
+  fetchAdminUsersAPI, fetchAdminUserDetailsAPI, toggleAdminUserStatusAPI, changeAdminUserRoleAPI,
   fetchPendingSellersAPI, approveAdminSellerAPI, rejectAdminSellerAPI,
   deleteAdminDepositLogAPI, bulkDeleteAdminDepositLogsAPI,
   fetchProductsAPI, approveProductAPI, rejectProductAPI,
@@ -29,6 +30,29 @@ interface AdminDashboardProps {
   onRejectGame: (gameId: number, reason: string) => void;
   onResolveGame: (gameId: number) => void;
 }
+
+const formatEtb = (value: number) => `ETB ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+const MiniTrendChart: React.FC<{
+  data: Array<{ date: string; value: number }>;
+  color: string;
+  fill: string;
+}> = ({ data, color, fill }) => {
+  const max = Math.max(...data.map(point => point.value), 1);
+  const points = data.map((point, index) => {
+    const x = data.length > 1 ? (index / (data.length - 1)) * 100 : 50;
+    const y = 96 - (point.value / max) * 82;
+    return `${x},${y}`;
+  }).join(' ');
+  const areaPoints = `0,100 ${points} 100,100`;
+
+  return (
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-28 overflow-visible">
+      <polygon points={areaPoints} fill={fill} opacity="0.35" />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
 
 export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   games,
@@ -57,6 +81,18 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const [payments, setPayments] = useState<PaymentSubmission[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [users, setUsers] = useState<UserAdminRecord[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'USER' | 'SELLER' | 'ADMIN'>('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED' | 'BANNED'>('ALL');
+  const [inspectingUser, setInspectingUser] = useState<AdminUserDetails | null>(null);
+  const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
+  const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+  const [userDetailStartDate, setUserDetailStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(1);
+    return date.toISOString().slice(0, 10);
+  });
+  const [userDetailEndDate, setUserDetailEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [sellers, setSellers] = useState<any[]>([]);
 
   // Developer 3 Data States
@@ -66,6 +102,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
   const [reportFilter, setReportFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED' | 'DISMISSED'>('PENDING');
   const [settingValues, setSettingValues] = useState<Record<string, string>>({});
   const [platformAnalytics, setPlatformAnalytics] = useState<AdminPlatformAnalytics | null>(null);
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 29);
+    return date.toISOString().slice(0, 10);
+  });
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [withdrawalFilter, setWithdrawalFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
@@ -76,7 +118,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     loadAdminData();
-  }, []);
+  }, [analyticsStartDate, analyticsEndDate]);
 
   const loadAdminData = async () => {
     const depList = await fetchAdminDepositsAPI(paymentFilter);
@@ -98,7 +140,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
       st.forEach(item => { map[item.key] = item.value; });
       setSettingValues(map);
     });
-    fetchAdminPlatformAnalyticsAPI().then(an => setPlatformAnalytics(an));
+    fetchAdminPlatformAnalyticsAPI(analyticsStartDate, analyticsEndDate).then(an => setPlatformAnalytics(an));
   };
 
   const handleApproveProduct = async (id: number) => {
@@ -346,6 +388,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
       setErrorMsg(res.message);
     }
   };
+
+  const handleInspectUser = async (userId: number) => {
+    setInspectingUserId(userId);
+  };
+
+  useEffect(() => {
+    if (inspectingUserId === null) return;
+    setLoadingUserDetails(true);
+    fetchAdminUserDetailsAPI(inspectingUserId, userDetailStartDate, userDetailEndDate).then(details => {
+      setInspectingUser(details);
+      setLoadingUserDetails(false);
+    });
+  }, [inspectingUserId, userDetailStartDate, userDetailEndDate]);
+
+  const filteredUsers = users.filter(user => {
+    const query = userSearch.trim().toLowerCase();
+    const matchesSearch = !query || [user.username, user.email, user.phoneNumber].some(value => (value || '').toLowerCase().includes(query));
+    const matchesRole = userRoleFilter === 'ALL' || user.role === userRoleFilter;
+    const matchesStatus = userStatusFilter === 'ALL' || user.accountStatus === userStatusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   const handleApproveSeller = async (id: number) => {
     setStatusMsg('');
@@ -937,12 +1000,18 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
       {/* Tab 5: User Administration */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-            <Users className="w-5 h-5 text-cyan-400" />
-            Registered Accounts Administration
-          </h3>
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div><h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2"><Users className="w-5 h-5 text-cyan-400" /> Registered Accounts Administration</h3><p className="text-xs text-slate-500 mt-1">Search identity, filter access state, and inspect wallet-level financial details.</p></div>
+            <div className="text-xs font-mono text-slate-500">Showing <span className="text-cyan-300 font-bold">{filteredUsers.length}</span> of {users.length} accounts</div>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-2 p-3 bg-slate-900/70 border border-slate-800 rounded-2xl">
+            <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search username, email, or phone number..." className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none" /></div>
+            <select value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value as typeof userRoleFilter)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300"><option value="ALL">All roles</option><option value="USER">Players</option><option value="SELLER">Sellers</option><option value="ADMIN">Admins</option></select>
+            <select value={userStatusFilter} onChange={e => setUserStatusFilter(e.target.value as typeof userStatusFilter)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300"><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="BANNED">Banned</option></select>
+            {(userSearch || userRoleFilter !== 'ALL' || userStatusFilter !== 'ALL') && <button onClick={() => { setUserSearch(''); setUserRoleFilter('ALL'); setUserStatusFilter('ALL'); }} className="px-3 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-950 rounded-xl">Clear filters</button>}
+          </div>
           <div className="glass-panel overflow-hidden border border-slate-800 rounded-2xl">
-            <table className="w-full text-left text-xs text-slate-300">
+            <div className="overflow-x-auto"><table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900/90 text-slate-400 uppercase font-mono border-b border-slate-800">
                 <tr>
                   <th className="p-3">Username</th>
@@ -954,7 +1023,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {users.map((u) => (
+                {filteredUsers.length === 0 ? (
+                  <tr><td colSpan={6} className="p-8 text-center text-slate-500">No users match the current filters.</td></tr>
+                ) : filteredUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-900/40">
                     <td className="p-3 font-sans font-bold text-slate-100">{u.username}</td>
                     <td className="p-3 text-slate-400">{u.email || 'N/A'}</td>
@@ -983,6 +1054,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                     </td>
                     <td className="p-3 text-slate-500">{new Date(u.dateJoined).toLocaleDateString()}</td>
                     <td className="p-3 text-right space-x-2">
+                      <button onClick={() => handleInspectUser(u.id)} disabled={loadingUserDetails} className="px-2.5 py-1 rounded text-[11px] font-bold bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-600/40 disabled:opacity-50" title="Inspect wallet and activity"><Eye className="inline w-3.5 h-3.5 mr-1" />{loadingUserDetails ? 'Loading' : 'Details'}</button>
                       <button
                         onClick={() => handleToggleUserStatus(u.id, u.accountStatus)}
                         className={`px-2.5 py-1 rounded text-[11px] font-bold ${
@@ -1012,7 +1084,24 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
+          </div>
+        </div>
+      )}
+
+      {inspectingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+          <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto bg-slate-900 border border-cyan-500/30 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6">
+            <button onClick={() => { setInspectingUser(null); setInspectingUserId(null); }} className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full"><X className="w-5 h-5" /></button>
+            <div className="flex items-start gap-4 border-b border-slate-800 pb-5 pr-10"><div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-2xl font-black text-slate-950">{inspectingUser.user.username.charAt(0).toUpperCase()}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-xl font-black text-white">{inspectingUser.user.username}</h3><span className="px-2 py-0.5 rounded-lg bg-cyan-950 text-cyan-300 text-[10px] font-bold">{inspectingUser.user.role}</span><span className="px-2 py-0.5 rounded-lg bg-emerald-950 text-emerald-300 text-[10px] font-bold">{inspectingUser.user.accountStatus}</span></div><p className="text-xs text-slate-400 mt-1">{inspectingUser.user.email || 'No email'} {inspectingUser.user.phoneNumber ? `• ${inspectingUser.user.phoneNumber}` : ''}</p><p className="text-[10px] text-slate-600 font-mono mt-1">Joined {new Date(inspectingUser.activity.date_joined).toLocaleString()} • Last login {inspectingUser.activity.last_login ? new Date(inspectingUser.activity.last_login).toLocaleString() : 'Never'}</p></div></div>
+
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 p-3 bg-slate-950/70 border border-cyan-500/20 rounded-2xl"><div><div className="text-[10px] text-cyan-300 uppercase font-mono font-bold">User reporting period</div><div className="text-[10px] text-slate-500 mt-1">Wallet balance is current; activity and money movement use this period.</div></div><div className="flex flex-wrap items-end gap-2"><div className="flex gap-1 p-1 bg-slate-900 rounded-xl">{[{ label: 'Today', days: 0 }, { label: 'Week', days: 6 }, { label: 'Month', days: 29 }, { label: 'Year', days: 364 }].map(preset => <button key={preset.label} type="button" onClick={() => { const date = new Date(); date.setDate(date.getDate() - preset.days); setUserDetailStartDate(date.toISOString().slice(0, 10)); setUserDetailEndDate(new Date().toISOString().slice(0, 10)); }} className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:bg-cyan-500/10 hover:text-cyan-300">{preset.label}</button>)}</div><label className="text-[9px] text-slate-500 font-mono">From<input type="date" value={userDetailStartDate} max={userDetailEndDate} onChange={e => setUserDetailStartDate(e.target.value)} className="block mt-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-200" /></label><label className="text-[9px] text-slate-500 font-mono">To<input type="date" value={userDetailEndDate} min={userDetailStartDate} onChange={e => setUserDetailEndDate(e.target.value)} className="block mt-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-200" /></label></div></div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Wallet balance</div><div className="text-2xl font-black font-mono text-emerald-300">{formatEtb(inspectingUser.wallet.balance)}</div><div className="text-[10px] text-slate-500 mt-1">Available {formatEtb(inspectingUser.wallet.available_balance)}</div></div><div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Reserved balance</div><div className="text-2xl font-black font-mono text-amber-300">{formatEtb(inspectingUser.wallet.reserved_balance)}</div><div className="text-[10px] text-slate-500 mt-1">Held for withdrawals</div></div><div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Ledger transactions</div><div className="text-2xl font-black font-mono text-cyan-300">{inspectingUser.financials.transaction_count}</div><div className="text-[10px] text-slate-500 mt-1">All wallet movements</div></div></div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono"><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Deposits approved</div><div className="text-emerald-300 font-black">{formatEtb(inspectingUser.financials.deposits_approved)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Withdrawals approved</div><div className="text-rose-300 font-black">{formatEtb(inspectingUser.financials.withdrawals_approved)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Game entry spend</div><div className="text-purple-300 font-black">{formatEtb(inspectingUser.financials.entry_spend)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Rewards received</div><div className="text-amber-300 font-black">{formatEtb(inspectingUser.financials.rewards_received)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Pending deposits</div><div className="text-cyan-300 font-black">{formatEtb(inspectingUser.financials.deposits_pending)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Pending withdrawals</div><div className="text-amber-300 font-black">{formatEtb(inspectingUser.financials.withdrawals_pending)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Refunded deposits</div><div className="text-rose-300 font-black">{formatEtb(inspectingUser.financials.deposits_refunded)}</div></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Activity</div><div className="text-cyan-300 font-black">{inspectingUser.activity.game_entries} entries / {inspectingUser.activity.games_won} wins</div></div></div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5"><div className="lg:col-span-2"><h4 className="font-black text-white flex items-center gap-2 mb-3"><WalletCards className="w-4 h-4 text-cyan-400" /> Recent wallet ledger</h4><div className="overflow-x-auto border border-slate-800 rounded-2xl"><table className="w-full text-left text-xs"><thead className="bg-slate-950 text-slate-500 uppercase font-mono"><tr><th className="p-3">Type</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Date</th></tr></thead><tbody className="divide-y divide-slate-800">{inspectingUser.recent_transactions.length === 0 ? <tr><td colSpan={4} className="p-5 text-center text-slate-500">No wallet transactions.</td></tr> : inspectingUser.recent_transactions.map(tx => <tr key={tx.id}><td className="p-3"><div className="font-bold text-slate-200">{tx.type}</div><div className="text-[10px] text-slate-500">{tx.note || 'Ledger entry'}</div></td><td className={`p-3 font-mono font-bold ${tx.direction === 'CREDIT' ? 'text-emerald-300' : 'text-rose-300'}`}>{tx.direction === 'CREDIT' ? '+' : '-'}{formatEtb(Math.abs(tx.amount))}</td><td className="p-3 text-slate-400">{tx.status}</td><td className="p-3 text-slate-500 font-mono">{new Date(tx.created_at).toLocaleDateString()}</td></tr>)}</tbody></table></div></div><div className="space-y-3"><h4 className="font-black text-white">Account intelligence</h4><div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2 text-xs"><div className="flex justify-between"><span className="text-slate-500">Favorites</span><b className="text-slate-200">{inspectingUser.activity.favorites}</b></div><div className="flex justify-between"><span className="text-slate-500">Unread alerts</span><b className="text-amber-300">{inspectingUser.activity.unread_notifications}</b></div>{inspectingUser.seller ? <><div className="border-t border-slate-800 pt-2 text-purple-300 font-bold">{inspectingUser.seller.business_name}</div><div className="flex justify-between"><span className="text-slate-500">Seller status</span><b className="text-purple-300">{inspectingUser.seller.status}</b></div><div className="text-slate-500">{inspectingUser.seller.address}</div></> : <div className="border-t border-slate-800 pt-2 text-slate-500">No seller profile attached.</div>}</div></div></div>
           </div>
         </div>
       )}
@@ -1389,78 +1478,134 @@ export const AdminDashboardPage: React.FC<AdminDashboardProps> = ({
 
       {/* 9. REAL PLATFORM ANALYTICS */}
       {activeTab === 'analytics' && (
-        <div className="space-y-5">
-          <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
-            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-emerald-400" />
-              Live Platform Analytics & Financial Telemetry
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Database-backed aggregates computed dynamically across users, ledgers, games, and fulfillment.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="glass-card p-5 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-slate-400 font-bold">USER BASE</span>
-                <Users className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-3xl font-extrabold font-mono text-cyan-300">
-                {platformAnalytics?.users.total || users.length}
-              </div>
-              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
-                <div className="flex justify-between"><span>Active:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.users.active ?? users.filter(u => u.accountStatus === 'ACTIVE').length}</span></div>
-                <div className="flex justify-between"><span>Banned:</span><span className="text-rose-300 font-bold">{platformAnalytics?.users.banned ?? users.filter(u => u.accountStatus === 'BANNED').length}</span></div>
-                <div className="flex justify-between"><span>Verified Sellers:</span><span className="text-purple-300 font-bold">{platformAnalytics?.users.verifiedSellers ?? users.filter(u => u.role === 'SELLER').length}</span></div>
-              </div>
+        <div className="space-y-6">
+          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 p-4 bg-slate-900/80 border border-emerald-500/20 rounded-2xl">
+            <div>
+              <div className="text-[10px] text-emerald-300 font-mono font-bold uppercase tracking-widest">Financial reporting period</div>
+              <p className="text-xs text-slate-500 mt-1">All money metrics below are recalculated for the selected dates. Wallet balances are current snapshots.</p>
             </div>
-
-            <div className="glass-card p-5 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-slate-400 font-bold">COMPETITIONS</span>
-                <Store className="w-4 h-4 text-purple-400" />
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                {[
+                  { label: '7D', days: 6 },
+                  { label: '30D', days: 29 },
+                  { label: '90D', days: 89 },
+                  { label: 'YTD', days: Math.max(new Date().getDate() - 1, 0) },
+                ].map(preset => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const date = new Date();
+                      if (preset.label === 'YTD') date.setMonth(0, 1);
+                      else date.setDate(date.getDate() - preset.days);
+                      setAnalyticsStartDate(date.toISOString().slice(0, 10));
+                      setAnalyticsEndDate(new Date().toISOString().slice(0, 10));
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                  >{preset.label}</button>
+                ))}
               </div>
-              <div className="text-3xl font-extrabold font-mono text-purple-300">
-                {platformAnalytics?.competitions.total || games.length}
-              </div>
-              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
-                <div className="flex justify-between"><span>Active:</span><span className="text-cyan-300 font-bold">{platformAnalytics?.competitions.active ?? games.filter(g => g.status === 'ACTIVE').length}</span></div>
-                <div className="flex justify-between"><span>Completed:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.competitions.completed ?? games.filter(g => g.status === 'COMPLETED').length}</span></div>
-                <div className="flex justify-between"><span>Total Entries:</span><span className="text-amber-300 font-bold">{platformAnalytics?.competitions.totalEntries ?? 0}</span></div>
-              </div>
-            </div>
-
-            <div className="glass-card p-5 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-slate-400 font-bold">FINANCIAL VOLUME</span>
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-2xl font-extrabold font-mono text-emerald-400">
-                ETB {(platformAnalytics?.financials.totalDepositsEtb || 0).toLocaleString()}
-              </div>
-              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
-                <div className="flex justify-between"><span>Deposits Approved:</span><span className="text-emerald-300 font-bold">ETB {(platformAnalytics?.financials.totalDepositsEtb || 0).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Withdrawals Settled:</span><span className="text-rose-300 font-bold">ETB {(platformAnalytics?.financials.totalWithdrawalsEtb || 0).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Competition Flow:</span><span className="text-cyan-300 font-bold">ETB {(platformAnalytics?.financials.platformVolumeEtb || 0).toLocaleString()}</span></div>
-              </div>
-            </div>
-
-            <div className="glass-card p-5 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-slate-400 font-bold">FULFILLMENT & TRUST</span>
-                <Package className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="text-3xl font-extrabold font-mono text-amber-300">
-                {platformAnalytics?.fulfillment.totalDeliveries || 0}
-              </div>
-              <div className="space-y-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
-                <div className="flex justify-between"><span>Delivered:</span><span className="text-emerald-300 font-bold">{platformAnalytics?.fulfillment.completedDeliveries || 0}</span></div>
-                <div className="flex justify-between"><span>Pending Delivery:</span><span className="text-amber-300 font-bold">{platformAnalytics?.fulfillment.pendingDeliveries || 0}</span></div>
-                <div className="flex justify-between"><span>Pending Reports:</span><span className="text-rose-400 font-bold">{platformAnalytics?.moderation.pendingReports || reports.filter(r => r.status === 'PENDING').length}</span></div>
-              </div>
+              <label className="text-[10px] text-slate-500 font-mono">From<input type="date" value={analyticsStartDate} max={analyticsEndDate} onChange={e => setAnalyticsStartDate(e.target.value)} className="block mt-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200" /></label>
+              <label className="text-[10px] text-slate-500 font-mono">To<input type="date" value={analyticsEndDate} min={analyticsStartDate} onChange={e => setAnalyticsEndDate(e.target.value)} className="block mt-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200" /></label>
             </div>
           </div>
+          <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/40 p-6 sm:p-8 rounded-3xl border border-emerald-500/25 shadow-2xl">
+            <div className="absolute right-8 top-6 opacity-10"><BarChart3 className="w-32 h-32 text-emerald-300" /></div>
+            <div className="relative space-y-2">
+              <div className="flex items-center gap-2 text-emerald-300 text-[11px] font-mono font-bold uppercase tracking-[0.2em]"><Activity className="w-4 h-4" /> Executive intelligence center</div>
+              <h3 className="text-2xl sm:text-3xl font-black text-white">Platform Analytics Command Center</h3>
+              <p className="max-w-2xl text-xs sm:text-sm text-slate-400">Live database-backed view of acquisition, marketplace activity, competition demand, cash movement, and platform economics for the selected reporting period.</p>
+              <div className="flex items-center gap-2 pt-2 text-[10px] text-slate-500 font-mono"><RefreshCw className="w-3.5 h-3.5 text-emerald-400" /> {platformAnalytics?.financials.periodStart || analyticsStartDate} to {platformAnalytics?.financials.periodEnd || analyticsEndDate}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Users', value: platformAnalytics?.users.total || users.length, detail: `${platformAnalytics?.users.active30d || 0} active in 30d`, icon: Users, color: 'text-cyan-300', border: 'border-cyan-500/30' },
+              { label: 'Verified Sellers', value: platformAnalytics?.users.verifiedSellers || 0, detail: `${platformAnalytics?.users.pendingSellers || 0} awaiting review`, icon: Store, color: 'text-purple-300', border: 'border-purple-500/30' },
+              { label: 'Game Entries', value: platformAnalytics?.competitions.totalEntries || 0, detail: `${platformAnalytics?.competitions.active || 0} active games`, icon: Trophy, color: 'text-amber-300', border: 'border-amber-500/30' },
+              { label: 'Gross Revenue', value: formatEtb(platformAnalytics?.financials.grossRevenueEtb || 0), detail: `${platformAnalytics?.financials.commissionPercent || 0}% commission rate`, icon: DollarSign, color: 'text-emerald-300', border: 'border-emerald-500/30' },
+            ].map(card => (
+              <div key={card.label} className={`glass-card p-4 border ${card.border} space-y-3`}>
+                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-500 uppercase"><span>{card.label}</span><card.icon className={`w-4 h-4 ${card.color}`} /></div>
+                <div className={`text-2xl sm:text-3xl font-black font-mono ${card.color}`}>{card.value}</div>
+                <div className="text-[10px] text-slate-400 font-mono">{card.detail}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className="xl:col-span-2 glass-card p-5 border border-slate-800 space-y-4">
+              <div className="flex items-start justify-between"><div><h4 className="font-black text-white flex items-center gap-2"><TrendingUp className="w-4 h-4 text-cyan-400" /> Acquisition & supply growth</h4><p className="text-[11px] text-slate-500 mt-1">Daily new records during the last 30 days</p></div><CalendarDays className="w-5 h-5 text-slate-600" /></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'Users', data: platformAnalytics?.trends.users || [], color: '#22d3ee', fill: '#164e63' },
+                  { label: 'Sellers', data: platformAnalytics?.trends.sellers || [], color: '#c084fc', fill: '#581c87' },
+                  { label: 'Games', data: platformAnalytics?.trends.games || [], color: '#fbbf24', fill: '#78350f' },
+                ].map(trend => (
+                  <div key={trend.label} className="bg-slate-950/60 rounded-2xl border border-slate-800 p-3 space-y-2"><div className="flex justify-between text-xs"><span className="text-slate-300 font-bold">{trend.label}</span><span className="text-slate-500 font-mono">{trend.data.reduce((sum, point) => sum + point.value, 0)} new</span></div><MiniTrendChart data={trend.data} color={trend.color} fill={trend.fill} /><div className="flex justify-between text-[9px] text-slate-600 font-mono"><span>30 days ago</span><span>Today</span></div></div>
+                ))}
+              </div>
+            </div>
+
+            <div className="glass-card p-5 border border-slate-800 space-y-4">
+              <div><h4 className="font-black text-white flex items-center gap-2"><UserRound className="w-4 h-4 text-emerald-400" /> User health</h4><p className="text-[11px] text-slate-500 mt-1">Activity and 30-day return behavior</p></div>
+              <div className="flex items-end gap-3"><span className="text-5xl font-black font-mono text-emerald-300">{platformAnalytics?.users.retentionRate || 0}%</span><span className="pb-1 text-xs text-slate-500">retention rate</span></div>
+              <div className="h-3 rounded-full bg-slate-800 overflow-hidden"><div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400" style={{ width: `${Math.min(platformAnalytics?.users.retentionRate || 0, 100)}%` }} /></div>
+              <div className="space-y-2 text-xs font-mono"><div className="flex justify-between"><span className="text-slate-500">Active users (30d)</span><span className="text-emerald-300 font-bold">{platformAnalytics?.users.active30d || 0}</span></div><div className="flex justify-between"><span className="text-slate-500">Returning users</span><span className="text-cyan-300 font-bold">{platformAnalytics?.users.retainedUsers || 0}</span></div><div className="flex justify-between"><span className="text-slate-500">Eligible cohort</span><span className="text-slate-300 font-bold">{platformAnalytics?.users.retentionEligible || 0}</span></div></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+            <div className="xl:col-span-3 glass-card p-5 border border-slate-800 space-y-4">
+              <div className="flex items-start justify-between"><div><h4 className="font-black text-white flex items-center gap-2"><Activity className="w-4 h-4 text-amber-400" /> Daily participants & revenue</h4><p className="text-[11px] text-slate-500 mt-1">Competition demand and game-entry value by day</p></div><span className="text-[10px] font-mono text-slate-500">30D</span></div>
+              <div className="h-44 flex items-end gap-1 border-b border-slate-800 px-1">
+                {(platformAnalytics?.trends.dailyParticipants || []).map(day => {
+                  const max = Math.max(...(platformAnalytics?.trends.dailyParticipants || []).map(item => item.participants), 1);
+                  return <div key={day.date} title={`${day.date}: ${day.participants} participants`} className="flex-1 min-w-[3px] bg-gradient-to-t from-amber-600 to-emerald-400 rounded-t-sm hover:opacity-80" style={{ height: `${Math.max((day.participants / max) * 100, day.participants ? 4 : 1)}%` }} />;
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono"><div className="p-3 bg-slate-950/70 rounded-xl"><div className="text-slate-500">Period participants</div><div className="text-amber-300 text-xl font-black">{platformAnalytics?.competitions.totalEntries || 0}</div></div><div className="p-3 bg-slate-950/70 rounded-xl"><div className="text-slate-500">Period game revenue</div><div className="text-emerald-300 text-xl font-black">{formatEtb((platformAnalytics?.trends.dailyParticipants || []).reduce((sum, day) => sum + day.revenue, 0))}</div></div></div>
+            </div>
+            <div className="xl:col-span-2 glass-card p-5 border border-slate-800 space-y-4"><div><h4 className="font-black text-white flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-400" /> Financial control room</h4><p className="text-[11px] text-slate-500 mt-1">Approved, pending, rejected, and returned cash</p></div><div className="space-y-2 text-xs font-mono"><div className="flex justify-between p-2.5 bg-emerald-950/30 rounded-lg"><span className="text-slate-400">Deposits approved</span><span className="text-emerald-300 font-bold">{formatEtb(platformAnalytics?.financials.totalDepositsEtb || 0)}</span></div><div className="flex justify-between p-2.5 bg-rose-950/30 rounded-lg"><span className="text-slate-400">Withdrawals approved</span><span className="text-rose-300 font-bold">{formatEtb(platformAnalytics?.financials.totalWithdrawalsEtb || 0)}</span></div><div className="flex justify-between p-2.5 bg-amber-950/30 rounded-lg"><span className="text-slate-400">Refunds issued</span><span className="text-amber-300 font-bold">{formatEtb((platformAnalytics?.financials.refundsEtb || 0) + (platformAnalytics?.financials.refundedDepositsEtb || 0))}</span></div><div className="flex justify-between p-2.5 bg-cyan-950/30 rounded-lg"><span className="text-slate-400">Platform commission</span><span className="text-cyan-300 font-bold">{formatEtb(platformAnalytics?.financials.netCommissionEtb || 0)}</span></div></div><div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-500"><span>Pending deposits: <b className="text-amber-300">{platformAnalytics?.financials.pendingDepositsCount || 0}</b></span><span>Pending withdrawals: <b className="text-amber-300">{platformAnalytics?.financials.pendingWithdrawalsCount || 0}</b></span><span>Rejected deposits: <b className="text-rose-300">{platformAnalytics?.financials.rejectedDepositsCount || 0}</b></span><span>Rejected withdrawals: <b className="text-rose-300">{platformAnalytics?.financials.rejectedWithdrawalsCount || 0}</b></span></div></div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="glass-card p-5 border border-emerald-500/25 space-y-3"><div className="flex justify-between text-[10px] text-slate-500 uppercase font-mono font-bold"><span>Current wallet liquidity</span><DollarSign className="w-4 h-4 text-emerald-400" /></div><div className="text-2xl font-black font-mono text-emerald-300">{formatEtb(platformAnalytics?.financials.walletBalanceEtb || 0)}</div><div className="space-y-1 text-[10px] font-mono"><div className="flex justify-between text-slate-500"><span>Available</span><b className="text-cyan-300">{formatEtb(platformAnalytics?.financials.availableWalletBalanceEtb || 0)}</b></div><div className="flex justify-between text-slate-500"><span>Reserved</span><b className="text-amber-300">{formatEtb(platformAnalytics?.financials.reservedWalletBalanceEtb || 0)}</b></div></div></div>
+            <div className="glass-card p-5 border border-cyan-500/25 space-y-3"><div className="flex justify-between text-[10px] text-slate-500 uppercase font-mono font-bold"><span>Net cash flow</span><Activity className="w-4 h-4 text-cyan-400" /></div><div className={`text-2xl font-black font-mono ${(platformAnalytics?.financials.netCashFlowEtb || 0) >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{formatEtb(platformAnalytics?.financials.netCashFlowEtb || 0)}</div><div className="text-[10px] text-slate-500 font-mono">Approved deposits minus approved withdrawals</div></div>
+            <div className="glass-card p-5 border border-purple-500/25 space-y-3"><div className="flex justify-between text-[10px] text-slate-500 uppercase font-mono font-bold"><span>Net platform profit</span><TrendingUp className="w-4 h-4 text-purple-400" /></div><div className="text-2xl font-black font-mono text-purple-300">{formatEtb(platformAnalytics?.financials.netProfitEtb || 0)}</div><div className="text-[10px] text-slate-500 font-mono">Commission less refunds in period</div></div>
+            <div className="glass-card p-5 border border-amber-500/25 space-y-3"><div className="flex justify-between text-[10px] text-slate-500 uppercase font-mono font-bold"><span>Pending exposure</span><Activity className="w-4 h-4 text-amber-400" /></div><div className="text-2xl font-black font-mono text-amber-300">{formatEtb(platformAnalytics?.financials.pendingWithdrawalValueEtb || 0)}</div><div className="text-[10px] text-slate-500 font-mono">Reserved for pending withdrawals</div></div>
+          </div>
+
+          <div className="glass-card p-5 border border-emerald-500/30 bg-gradient-to-br from-slate-900 to-emerald-950/20 space-y-5">
+            <div><h4 className="font-black text-white flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-400" /> Profit bridge</h4><p className="text-[11px] text-slate-500 mt-1">How competition money becomes platform profit for the selected period</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Gross platform profit</div><div className="text-3xl font-black font-mono text-emerald-300">{formatEtb(platformAnalytics?.financials.grossProfitEtb || 0)}</div><div className="text-[10px] text-slate-500 mt-1">{platformAnalytics?.financials.commissionPercent || 0}% of gross game-entry revenue</div></div><div className="p-4 rounded-2xl bg-slate-950/70 border border-amber-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Less refunds</div><div className="text-3xl font-black font-mono text-amber-300">- {formatEtb(platformAnalytics?.financials.refundsEtb || 0)}</div><div className="text-[10px] text-slate-500 mt-1">{(platformAnalytics?.financials.refundRatePercent || 0).toFixed(2)}% refund rate on game volume</div></div><div className="p-4 rounded-2xl bg-slate-950/70 border border-cyan-500/20"><div className="text-[10px] text-slate-500 uppercase font-mono">Net platform profit</div><div className={`text-3xl font-black font-mono ${(platformAnalytics?.financials.netProfitEtb || 0) >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{formatEtb(platformAnalytics?.financials.netProfitEtb || 0)}</div><div className="text-[10px] text-slate-500 mt-1">Before hosting, staff, tax, and payment-provider costs</div></div></div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px] font-mono"><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Commission margin</div><b className="text-purple-300">{(platformAnalytics?.financials.commissionMarginPercent || 0).toFixed(2)}%</b></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Cash outflow</div><b className="text-rose-300">{formatEtb(platformAnalytics?.financials.cashOutflowEtb || 0)}</b></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Payout ratio</div><b className="text-amber-300">{(platformAnalytics?.financials.payoutRatioPercent || 0).toFixed(2)}%</b></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Deposit approval</div><b className="text-emerald-300">{(platformAnalytics?.financials.depositApprovalRatePercent || 0).toFixed(2)}%</b></div><div className="p-3 bg-slate-950/60 rounded-xl"><div className="text-slate-500">Post-payout liquidity</div><b className={`${(platformAnalytics?.financials.postWithdrawalLiquidityEtb || 0) >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{formatEtb(platformAnalytics?.financials.postWithdrawalLiquidityEtb || 0)}</b></div></div>
+          </div>
+
+          <div className="glass-card p-5 border border-slate-800 space-y-4">
+            <div><h4 className="font-black text-white flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-400" /> Unit economics & payout intelligence</h4><p className="text-[11px] text-slate-500 mt-1">Average transaction sizes and money distribution for the selected period</p></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-xs font-mono">
+              {[
+                ['Avg entry', formatEtb(platformAnalytics?.financials.averageEntryFeeEtb || 0), 'text-amber-300'],
+                ['Avg deposit', formatEtb(platformAnalytics?.financials.averageDepositEtb || 0), 'text-emerald-300'],
+                ['Avg withdrawal', formatEtb(platformAnalytics?.financials.averageWithdrawalEtb || 0), 'text-rose-300'],
+                ['Game entries', String(platformAnalytics?.financials.gameEntryCount || 0), 'text-cyan-300'],
+                ['Rewards paid', formatEtb(platformAnalytics?.financials.rewardPayoutsEtb || 0), 'text-purple-300'],
+                ['Gross profit', formatEtb(platformAnalytics?.financials.grossProfitEtb || 0), 'text-emerald-300'],
+                ['Net profit', formatEtb(platformAnalytics?.financials.netProfitEtb || 0), 'text-cyan-300'],
+                ['Commission', `${platformAnalytics?.financials.commissionPercent || 0}%`, 'text-purple-300'],
+              ].map(([label, value, color]) => <div key={label} className="p-3 bg-slate-950/70 rounded-xl border border-slate-800"><div className="text-[10px] text-slate-500 mb-1">{label}</div><div className={`font-black ${color}`}>{value}</div></div>)}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="glass-card p-5 border border-slate-800 space-y-4"><div><h4 className="font-black text-white flex items-center gap-2"><Trophy className="w-4 h-4 text-purple-400" /> Most popular game types</h4><p className="text-[11px] text-slate-500 mt-1">Ranked by participant entries</p></div>{(platformAnalytics?.popularGameTypes || []).length === 0 ? <p className="text-xs text-slate-500 py-5">No game activity yet.</p> : <div className="space-y-3">{platformAnalytics?.popularGameTypes.map((item, index) => { const max = Math.max(...(platformAnalytics?.popularGameTypes || []).map(type => type.participants), 1); return <div key={item.type} className="space-y-1"><div className="flex justify-between text-xs"><span className="text-slate-200 font-bold">{index + 1}. {item.type.replace(/_/g, ' ')}</span><span className="text-purple-300 font-mono">{item.participants} entries</span></div><div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-purple-600 to-cyan-400" style={{ width: `${(item.participants / max) * 100}%` }} /></div><div className="text-[10px] text-slate-500 font-mono">{item.games} competitions</div></div>; })}</div>}</div>
+            <div className="glass-card p-5 border border-slate-800 space-y-4"><div><h4 className="font-black text-white flex items-center gap-2"><Package className="w-4 h-4 text-cyan-400" /> Most popular products</h4><p className="text-[11px] text-slate-500 mt-1">Products drawing the most competition demand</p></div>{(platformAnalytics?.popularProducts || []).length === 0 ? <p className="text-xs text-slate-500 py-5">No product activity yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-[10px] text-slate-500 uppercase font-mono"><tr><th className="pb-2">Product</th><th className="pb-2 text-right">Games</th><th className="pb-2 text-right">Entries</th></tr></thead><tbody className="divide-y divide-slate-800/70">{platformAnalytics?.popularProducts.map(item => <tr key={item.id}><td className="py-3 pr-3"><div className="font-bold text-slate-200 truncate max-w-[230px]">{item.title}</div><div className="text-[10px] text-cyan-400 font-mono">{item.category}</div></td><td className="py-3 text-right text-purple-300 font-mono">{item.games}</td><td className="py-3 text-right text-amber-300 font-mono font-bold">{item.participants}</td></tr>)}</tbody></table></div>}</div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono"><div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl"><div className="text-slate-500">Active games</div><div className="text-cyan-300 text-2xl font-black">{platformAnalytics?.competitions.active || 0}</div><div className="text-[10px] text-slate-600">of {platformAnalytics?.competitions.total || 0} total</div></div><div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl"><div className="text-slate-500">Completed games</div><div className="text-emerald-300 text-2xl font-black">{platformAnalytics?.competitions.completed || 0}</div><div className="text-[10px] text-slate-600">resolved competitions</div></div><div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl"><div className="text-slate-500">Approved products</div><div className="text-purple-300 text-2xl font-black">{platformAnalytics?.products.approved || 0}</div><div className="text-[10px] text-slate-600">available to sellers</div></div><div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl"><div className="text-slate-500">Pending moderation</div><div className="text-rose-300 text-2xl font-black">{platformAnalytics?.moderation.pendingReports || 0}</div><div className="text-[10px] text-slate-600">reports requiring action</div></div></div>
         </div>
       )}
 

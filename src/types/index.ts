@@ -120,6 +120,26 @@ export interface UserAdminRecord {
   bannedAt?: string;
 }
 
+export interface AdminUserDetails {
+  user: UserAdminRecord & { first_name?: string; last_name?: string; telegram_id?: string; ban_reason?: string };
+  wallet: { balance: number; reserved_balance: number; available_balance: number };
+  activity: { game_entries: number; games_won: number; favorites: number; unread_notifications: number; last_login?: string; date_joined: string };
+  financials: {
+    period_start: string;
+    period_end: string;
+    deposits_approved: number;
+    deposits_pending: number;
+    deposits_refunded: number;
+    withdrawals_approved: number;
+    withdrawals_pending: number;
+    entry_spend: number;
+    rewards_received: number;
+    transaction_count: number;
+  };
+  seller: { business_name: string; status: string; address: string; created_at: string } | null;
+  recent_transactions: Array<{ id: number; type: string; direction: string; status: string; amount: number; note: string; created_at: string }>;
+}
+
 export interface UserStats {
   gamesPlayed: number;
   gamesWon: number;
@@ -127,6 +147,31 @@ export interface UserStats {
   winRate: number;
   totalEntries: number;
   totalSpent: number;
+}
+
+export interface UserBadge {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  threshold: number;
+  field: string;
+  points: number;
+  earned: boolean;
+  progress: number;
+  rank: number;
+  leaderboard: Array<{ rank: number; username: string; score: number; points: number; is_current_user: boolean }>;
+}
+
+export interface UserBadgeData {
+  total_points: number;
+  metrics: { entries: number; wins: number; games_played: number; spent: number; game_types: number; win_rate: number; points: number };
+  badges: UserBadge[];
+  leaderboards: {
+    winners: { rank: number; rows: Array<{ rank: number; username: string; score: number; points: number; is_current_user: boolean }> };
+    games_played: { rank: number; rows: Array<{ rank: number; username: string; score: number; points: number; is_current_user: boolean }> };
+  };
 }
 
 export interface Seller {
@@ -398,9 +443,13 @@ export interface AdminPlatformAnalytics {
   users: {
     total: number;
     active: number;
+    active30d: number;
     banned: number;
     verifiedSellers: number;
     pendingSellers: number;
+    retentionRate: number;
+    retentionEligible: number;
+    retainedUsers: number;
   };
   competitions: {
     total: number;
@@ -416,11 +465,39 @@ export interface AdminPlatformAnalytics {
     rejected: number;
   };
   financials: {
+    periodStart: string;
+    periodEnd: string;
     totalDepositsEtb: number;
     pendingDepositsCount: number;
+    rejectedDepositsCount: number;
+    refundedDepositsEtb: number;
     totalWithdrawalsEtb: number;
     pendingWithdrawalsCount: number;
+    rejectedWithdrawalsCount: number;
     platformVolumeEtb: number;
+    grossRevenueEtb: number;
+    refundsEtb: number;
+    commissionPercent: number;
+    commissionEtb: number;
+    netCommissionEtb: number;
+    rewardPayoutsEtb: number;
+    averageEntryFeeEtb: number;
+    averageDepositEtb: number;
+    averageWithdrawalEtb: number;
+    gameEntryCount: number;
+    walletBalanceEtb: number;
+    reservedWalletBalanceEtb: number;
+    availableWalletBalanceEtb: number;
+    pendingWithdrawalValueEtb: number;
+    netCashFlowEtb: number;
+    grossProfitEtb: number;
+    netProfitEtb: number;
+    cashOutflowEtb: number;
+    payoutRatioPercent: number;
+    refundRatePercent: number;
+    commissionMarginPercent: number;
+    depositApprovalRatePercent: number;
+    postWithdrawalLiquidityEtb: number;
   };
   fulfillment: {
     totalDeliveries: number;
@@ -430,6 +507,14 @@ export interface AdminPlatformAnalytics {
   moderation: {
     pendingReports: number;
   };
+  trends: {
+    users: Array<{ date: string; value: number }>;
+    sellers: Array<{ date: string; value: number }>;
+    games: Array<{ date: string; value: number }>;
+    dailyParticipants: Array<{ date: string; participants: number; revenue: number }>;
+  };
+  popularGameTypes: Array<{ type: string; games: number; participants: number }>;
+  popularProducts: Array<{ id: number; title: string; category: string; games: number; participants: number }>;
 }
 
 export interface AnalyticsSummary {

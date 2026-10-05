@@ -1,25 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import type { Wallet, User, UserStats, Favorite, Notification, Game, HistoryRecord } from '../types';
+import type { Wallet, User, UserStats, Favorite, Notification, Game, UserBadgeData } from '../types';
 import { IconTrophy } from '../components/Icons';
 import { FloatingToastBanner } from '../components/FloatingToastBanner';
-import { Store, Package } from 'lucide-react';
+import { Store, Package, Trophy, Lock, Crown, Flame, Sparkles, Target, Compass, Banknote, Footprints, Medal } from 'lucide-react';
 import {
   fetchUserProfileAPI, updateUserProfileAPI,
   fetchFavoritesAPI, fetchUserStatsAPI,
   fetchNotificationsAPI, markNotificationReadAPI, markAllNotificationsReadAPI,
-  fetchMyGamesAPI, fetchUserHistoryAPI, applySellerAPI
+  fetchMyGamesAPI, applySellerAPI, fetchUserBadgesAPI
 } from '../services/api';
+
+const badgeIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  footprints: Footprints,
+  sparkles: Sparkles,
+  trophy: Trophy,
+  target: Target,
+  crown: Crown,
+  banknote: Banknote,
+  flame: Flame,
+  compass: Compass,
+};
 
 interface UserDashboardProps {
   wallet: Wallet;
   onOpenWallet: () => void;
+  sellerApplicationRequest?: number;
 }
 
 export const UserDashboardPage: React.FC<UserDashboardProps> = ({
   wallet,
   onOpenWallet,
+  sellerApplicationRequest = 0,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'my_games' | 'wallet' | 'history' | 'favorites' | 'notifications' | 'settings'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'my_games' | 'wallet' | 'badges' | 'favorites' | 'notifications' | 'settings'>('profile');
 
   // User Profile state
   const [userProfile, setUserProfile] = useState<User | null>(null);
@@ -47,7 +60,7 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [myGames, setMyGames] = useState<Game[]>([]);
-  const [historyLogs, setHistoryLogs] = useState<HistoryRecord[]>([]);
+  const [badgeData, setBadgeData] = useState<UserBadgeData | null>(null);
 
   // Games Filter State
   const [gameStatusFilter, setGameStatusFilter] = useState<string>('ALL');
@@ -55,6 +68,10 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
   useEffect(() => {
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    if (sellerApplicationRequest > 0) setShowSellerModal(true);
+  }, [sellerApplicationRequest]);
 
   const loadAllData = async () => {
     const prof = await fetchUserProfileAPI();
@@ -80,8 +97,8 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
     const games = await fetchMyGamesAPI(gameStatusFilter);
     setMyGames(games);
 
-    const logs = await fetchUserHistoryAPI();
-    setHistoryLogs(logs);
+    const badges = await fetchUserBadgesAPI();
+    setBadgeData(badges);
   };
 
   useEffect(() => {
@@ -189,7 +206,7 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
 
       {/* Main Account Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
-        {(['profile', 'my_games', 'wallet', 'history', 'favorites', 'notifications', 'settings'] as const).map((t) => (
+        {(['profile', 'my_games', 'wallet', 'badges', 'favorites', 'notifications', 'settings'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
@@ -475,55 +492,22 @@ export const UserDashboardPage: React.FC<UserDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB 4: HISTORY */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          <h3 className="font-extrabold text-lg text-slate-100">Chronological Audit Log</h3>
-          <div className="glass-panel overflow-hidden border border-slate-800 rounded-2xl">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-900/90 text-slate-400 uppercase font-mono border-b border-slate-800">
-                <tr>
-                  <th className="p-3">Activity Event</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Reference</th>
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Impact</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
-                {historyLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 font-sans">No activity history logs recorded yet.</td>
-                  </tr>
-                ) : (
-                  historyLogs.map((log) => {
-                    const isRejected = log.status === 'REJECTED' || log.status === 'CANCELLED';
-                    return (
-                      <tr key={log.id} className="hover:bg-slate-900/40">
-                        <td className="p-3 font-sans font-bold text-slate-200">{log.title}</td>
-                        <td className="p-3 text-cyan-400">{log.type}</td>
-                        <td className="p-3 text-slate-400">{log.referenceId}</td>
-                        <td className="p-3 text-slate-500">{new Date(log.date).toLocaleDateString()}</td>
-                        <td className="p-3 font-sans">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            log.status === 'COMPLETED' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
-                            isRejected ? 'bg-rose-950 text-rose-300 border border-rose-500/30' :
-                            'bg-amber-950 text-amber-300 border border-amber-500/30'
-                          }`}>
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className={`p-3 text-right font-bold ${isRejected ? 'text-slate-400' : log.direction === 'CREDIT' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {isRejected ? '0.00 ETB' : (log.direction === 'CREDIT' ? `+${log.amount} ETB` : `-${log.amount} ETB`)}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+      {/* TAB 4: BADGES */}
+      {activeTab === 'badges' && (
+        <div className="space-y-6">
+          <div className="relative overflow-hidden p-6 rounded-3xl border border-amber-500/30 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30">
+            <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-5"><div><div className="text-[10px] text-amber-300 font-mono font-bold uppercase tracking-[0.2em]">Achievement hall</div><h3 className="text-2xl sm:text-3xl font-black text-white mt-1">Your Player Badges</h3><p className="text-xs text-slate-400 mt-2 max-w-xl">Every badge is calculated from your real competitions, wins, spending, and game variety.</p></div><div className="text-right"><div className="text-[10px] text-slate-500 uppercase font-mono">Player points</div><div className="text-4xl font-black font-mono text-amber-300">{badgeData?.total_points || 0}</div><div className="text-[10px] text-slate-500">{badgeData?.badges.filter(b => b.earned).length || 0} badges unlocked</div></div></div>
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {[
+              { key: 'winners' as const, title: 'Top Winners', subtitle: 'Ranked by competitions won', icon: Trophy, color: 'text-amber-300', empty: 'No winners recorded yet.', unit: 'wins' },
+              { key: 'games_played' as const, title: 'Most Active Players', subtitle: 'Ranked by games played', icon: Medal, color: 'text-cyan-300', empty: 'No games played yet.', unit: 'games' },
+            ].map(board => {
+              const leaderboard = badgeData?.leaderboards?.[board.key];
+              return <div key={board.key} className="glass-panel p-5 border border-slate-800 rounded-3xl space-y-4"><div className="flex items-start justify-between"><div><h3 className="font-black text-white flex items-center gap-2"><board.icon className={`w-5 h-5 ${board.color}`} /> {board.title}</h3><p className="text-[11px] text-slate-500 mt-1">{board.subtitle}</p></div><div className="text-right"><div className="text-[9px] text-slate-600 uppercase font-mono">Your rank</div><div className={`text-xl font-black font-mono ${board.color}`}>#{leaderboard?.rank || '-'}</div></div></div><div className="space-y-2">{(!leaderboard?.rows || leaderboard.rows.length === 0) ? <div className="p-5 text-center text-xs text-slate-500">{board.empty}</div> : leaderboard.rows.map(row => <div key={`${board.key}-${row.rank}-${row.username}`} className={`flex items-center gap-3 p-2.5 rounded-xl border ${row.is_current_user ? 'bg-cyan-950/50 border-cyan-500/40' : 'bg-slate-950/60 border-slate-800'}`}><span className={`w-7 text-center font-black font-mono ${row.rank <= 3 ? board.color : 'text-slate-500'}`}>#{row.rank}</span><div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-300">{row.username.slice(0, 2).toUpperCase()}</div><span className={`flex-1 text-xs font-bold ${row.is_current_user ? 'text-cyan-200' : 'text-slate-300'}`}>{row.username}{row.is_current_user ? ' (You)' : ''}</span><span className={`text-xs font-mono font-black ${board.color}`}>{row.score} {board.unit}</span><span className="hidden sm:inline text-[10px] text-slate-600 font-mono">{row.points} pts</span></div>)}</div></div>;
+            })}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">{(badgeData?.badges || []).map(badge => { const Icon = badgeIconMap[badge.icon] || Trophy; const progress = Math.min((badge.progress / badge.threshold) * 100, 100); return <div key={badge.key} className={`text-left p-4 rounded-2xl border ${badge.earned ? 'bg-slate-900 border-amber-500/40 shadow-lg shadow-amber-500/10' : 'bg-slate-950/60 border-slate-800 opacity-75'}`}><div className="flex items-start justify-between"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${badge.earned ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-900 text-slate-600'}`}>{badge.earned ? <Icon className="w-6 h-6" /> : <Lock className="w-5 h-5" />}</div><span className={`text-[10px] font-mono font-bold ${badge.earned ? 'text-emerald-300' : 'text-slate-600'}`}>{badge.earned ? `+${badge.points}` : 'LOCKED'}</span></div><h4 className={`mt-4 font-black ${badge.earned ? 'text-white' : 'text-slate-400'}`}>{badge.name}</h4><p className="text-[10px] text-slate-500 mt-1 min-h-[30px]">{badge.description}</p><div className="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full ${badge.earned ? 'bg-gradient-to-r from-amber-500 to-emerald-400' : 'bg-slate-600'}`} style={{ width: `${progress}%` }} /></div><div className="flex justify-between mt-1 text-[9px] font-mono text-slate-600"><span>{badge.progress}{badge.field === 'spent' ? ' ETB' : badge.field === 'win_rate' ? '%' : ''} / {badge.threshold}{badge.field === 'spent' ? ' ETB' : badge.field === 'win_rate' ? '%' : ''}</span></div></div>; })}</div>
         </div>
       )}
 

@@ -29,6 +29,7 @@ export function App() {
 
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [sellerApplicationRequest, setSellerApplicationRequest] = useState(0);
   const [authModalMsg, setAuthModalMsg] = useState<string | undefined>(undefined);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -45,7 +46,10 @@ export function App() {
     const res = await telegramAuthAPI(payload);
     if (res.success && res.user) {
       setCurrentUser(res.user);
-      if (res.user.role) setCurrentRole(res.user.role);
+      if (res.user.role) {
+        setCurrentRole(res.user.role);
+      }
+      setActiveTab('home');
       if (res.wallet) setWallet(res.wallet);
     }
   };
@@ -62,7 +66,10 @@ export function App() {
     const res = await telegramAuthAPI(payload);
     if (res.success && res.user) {
       setCurrentUser(res.user);
-      if (res.user.role) setCurrentRole(res.user.role);
+      if (res.user.role) {
+        setCurrentRole(res.user.role);
+      }
+      setActiveTab('home');
       const loadedWallet = await fetchWallet();
       setWallet(loadedWallet);
       triggerToast(`Switched Telegram User to ${res.user.first_name || res.user.username} [${res.user.role}]`);
@@ -236,6 +243,10 @@ export function App() {
           setAuthModalMsg(undefined);
           setIsAuthModalOpen(true);
         }}
+        onBecomeSeller={() => {
+          setActiveTab('dashboard');
+          setSellerApplicationRequest(previous => previous + 1);
+        }}
         onLogout={handleLogout}
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -318,6 +329,7 @@ export function App() {
           <UserDashboardPage
             wallet={wallet}
             onOpenWallet={() => setIsWalletOpen(true)}
+            sellerApplicationRequest={sellerApplicationRequest}
           />
         )}
 
@@ -360,6 +372,7 @@ export function App() {
           onSuccess={(user, role) => {
             setCurrentUser(user);
             setCurrentRole(role);
+            setActiveTab('home');
             loadInitialData();
             triggerToast(`Welcome back, ${user.username}!`);
           }}
